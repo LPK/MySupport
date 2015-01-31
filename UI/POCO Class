@@ -1,0 +1,85 @@
+public class TeamWebSite : DbContext
+    {
+        //EF Container 
+        public DbSet<Player> players
+        {
+            get;
+            set;
+        }
+    }
+
+    //Standard old POCO class
+    public class Player
+    {
+        public Player() { }
+
+        public int PlayerID { get; set; }
+
+        public string PlayerName { get; set; }
+        public string PlayerDescription { get; set; }
+        public int PlayerAge { get; set; }
+
+        //Standard Select
+        public List<Player> GetAllPlayers()
+        {
+            TeamWebSite db = new TeamWebSite();
+            return db.players.ToList<Player>();
+        }
+
+        //Insert
+        public void CreatePlayer(string PlayerName, string PlayerDescription, int PlayerAge)
+        {
+            TeamWebSite db = new TeamWebSite();
+            db.players.Add(new Player { PlayerName = PlayerName, PlayerDescription = PlayerDescription, PlayerAge = PlayerAge });
+            db.SaveChanges();
+        }
+
+        //Edit
+        public void EditPlayer(int PlayerID,string PlayerName, string PlayerDescription, int PlayerAge)
+        {
+            TeamWebSite db = new TeamWebSite();
+            Player p = db.players.SingleOrDefault(player => player.PlayerID == PlayerID);
+            if (p != null)
+            {
+                p.PlayerName = PlayerName;
+                p.PlayerAge = PlayerAge;
+                p.PlayerID = PlayerID;
+                db.SaveChanges();
+            }
+            else
+            {
+                throw new ApplicationException("Can not find the player");
+            }
+        }
+
+        //Delete
+        public void DeletePlayer(int PlayerID)
+        {
+            TeamWebSite db = new TeamWebSite();
+            Player p = db.players.SingleOrDefault(player => player.PlayerID == PlayerID);
+            if (p != null)
+            {
+                db.players.Remove(p);
+                db.SaveChanges();
+            }
+            else
+            {
+                throw new ApplicationException("Can not find the player");
+            }
+        }
+    }
+
+    //Called by Global.asax to reload the database in a situation when the model changes from 
+    //the physical DB
+    public class WebSiteInitializer :RecreateDatabaseIfModelChanges<TeamWebSite>
+    {
+        protected override void Seed(TeamWebSite context)
+        {
+            var Players = new List<Player>
+            {
+                new Player { PlayerID= 1, PlayerName="John", PlayerAge=31, PlayerDescription="older player" },
+                new Player { PlayerID=2, PlayerName="sTEVE" , PlayerAge=23, PlayerDescription="asdasd" }
+            };
+            Players.ForEach(d => context.players.Add(d));
+        }
+    }
