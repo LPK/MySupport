@@ -1,0 +1,519 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace Vantage.BusinessLogicLayer
+{
+    #region The MD2 Message-Digest Algorithm text
+    /*
+	 *					http://www.ietf.org/rfc/rfc1319.txt
+	 *                  The MD2 Message-Digest Algorithm
+	 * 
+	 * This document describes the MD2 message-digest algorithm. The
+	 * algorithm takes as input a message of arbitrary length and produces
+	 * as output a 128-bit "fingerprint" or "message digest" of the input.
+	 * It is conjectured that it is computationally infeasible to produce
+	 * two messages having the same message digest, or to produce any
+	 * message having a given prespecified target message digest. The MD2
+	 * algorithm is intended for digital signature applications, where a
+	 * large file must be "compressed" in a secure manner before being
+	 * signed with a private (secret) key under a public-key cryptosystem
+	 * such as RSA.
+	 * 
+	 * License to use MD2 is granted for non-commerical Internet Privacy-
+	 * Enhanced Mail [1-3].
+	 * 
+	 * This document is an update to the August 1989 RFC 1115 [3], which
+	 * also gives a reference implementation of MD2. The main differences
+	 * 
+	 * are that a textual description of MD2 is included, and that the
+	 * reference implementation of MD2 is more portable.
+	 * 
+	 * For OSI-based applications, MD2's object identifier is
+	 * 
+	 * md2 OBJECT IDENTIFIER ::=
+	 * iso(1) member-body(2) US(840) rsadsi(113549) digestAlgorithm(2) 2}
+	 * 
+	 * In the X.509 type AlgorithmIdentifier [4], the parameters for MD2
+	 * should have type NULL.
+	 * 
+	 * 2. Terminology and Notation
+	 * 
+	 *    In this document, a "byte" is an eight-bit quantity.
+	 * 
+	 *    Let x_i denote "x sub i". If the subscript is an expression, we
+	 *    surround it in braces, as in x_{i+1}. Similarly, we use ^ for
+	 *    superscripts (exponentiation), so that x^i denotes x to the i-th
+	 *    power.
+	 * 
+	 *    Let X xor Y denote the bit-wise XOR of X and Y.
+	 * 
+	 * 3. MD2 Algorithm Description
+	 * 
+	 *    We begin by supposing that we have a b-byte message as input, and
+	 *    that we wish to find its message digest. Here b is an arbitrary
+	 *    nonnegative integer; b may be zero, and it may be arbitrarily large.
+	 *    We imagine the bytes of the message written down as follows:
+	 * 
+	 *                    m_0 m_1 ... m_{b-1}
+	 * 
+   	 * The following five steps are performed to compute the message digest
+   	 * of the message.
+	 * 
+	 * 3.1 Step 1. Append Padding Bytes
+	 * 
+	 *    The message is "padded" (extended) so that its length (in bytes) is
+	 *    congruent to 0, modulo 16. That is, the message is extended so that
+	 *    it is a multiple of 16 bytes long. Padding is always performed, even
+	 *    if the length of the message is already congruent to 0, modulo 16.
+	 * 
+	 *    Padding is performed as follows: "i" bytes of value "i" are appended
+	 *    to the message so that the length in bytes of the padded message
+	 *    becomes congruent to 0, modulo 16. At least one byte and at most 16
+	 *    16 bytes are appended.
+	 * 
+	 *    At this point the resulting message (after padding with bytes) has a
+	 *    length that is an exact multiple of 16 bytes. Let M[0 ... N-1] denote
+	 *    the bytes of the resulting message, where N is a multiple of 16.
+	 * 
+	 * 3.2 Step 2. Append Checksum
+	 * 
+	 *    A 16-byte checksum of the message is appended to the result of the
+	 *    previous step.
+	 * 
+	 *    This step uses a 256-byte "random" permutation constructed from the
+	 *    digits of pi. Let S[i] denote the i-th element of this table. The
+	 *    table is given in the appendix.
+	 * 
+	 *    Do the following:
+	 * 
+	 *      // Clear checksum.
+	 * 	For i = 0 to 15 do:
+	 * 		Set C[i] to 0.
+	 * 	end // of loop on i
+	 * 
+	 * 	Set L to 0.
+	 * 
+	 * 	// Process each 16-word block. 
+	 * 	For i = 0 to N/16-1 do
+	 * 
+	 * 		// Checksum block i. 
+	 * 		For j = 0 to 15 do
+	 * 			Set c to M[i*16+j].
+	 * 			Set C[j] to S[c xor L].
+	 * 			Set L to C[j].
+	 * 		end // of loop on j 
+	 * 	end // of loop on i
+	 * 
+	 * 	The 16-byte checksum C[0 ... 15] is appended to the message. Let M[0
+	 * 	with checksum), where N' = N + 16.
+	 * 
+	 * 	3.3 Step 3. Initialize MD Buffer
+	 * 
+	 * 	A 48-byte buffer X is used to compute the message digest. The buffer
+	 * 	is initialized to zero.
+	 * 
+	 * 3.4 Step 4. Process Message in 16-Byte Blocks
+	 * 
+	 *    This step uses the same 256-byte permutation S as step 2 does.
+	 * 
+	 *    Do the following:
+	 * 
+	 *       // Process each 16-word block. 
+	 * 	For i = 0 to N'/16-1 do
+	 * 
+	 * 		// Copy block i into X. 
+	 * 		For j = 0 to 15 do
+	 * 			Set X[16+j] to M[i*16+j].
+	 * 			Set X[32+j] to (X[16+j] xor X[j]).
+	 * 		end // of loop on j 
+	 * 
+	 * 		Set t to 0.
+	 * 
+	 * 		// Do 18 rounds. 
+	 * 		For j = 0 to 17 do
+	 * 
+	 * 		// Round j. 
+	 * 		For k = 0 to 47 do
+	 * 			Set t and X[k] to (X[k] xor S[t]).
+	 * 		end // of loop on k
+	 * 
+	 * 		Set t to (t+j) modulo 256.
+	 * 	end // of loop on j 
+	 * 
+	 * 	end // of loop on i 
+	 * 
+	 * 	3.5 Step 5. Output
+	 * 
+	 * 	The message digest produced as output is X[0 ... 15]. That is, we
+	 * 	begin with X[0], and end with X[15].
+	 * 
+	 * 	This completes the description of MD2. A reference implementation in
+	 * 	C is given in the appendix.
+	 * 
+	 * 	4. Summary
+	 * 
+	 * 	The MD2 message-digest algorithm is simple to implement, and provides
+	 * 	a "fingerprint" or message digest of a message of arbitrary length.
+	 * 	It is conjectured that the difficulty of coming up with two messages
+	 * 	having the same message digest is on the order of 2^64 operations,
+	 * 	and that the difficulty of coming up with any message having a given
+	 * 	message digest is on the order of 2^128 operations. The MD2 algorithm
+	 * 	has been carefully scrutinized for weaknesses. It is, however, a
+	 * 	relatively new algorithm and further security analysis is of course
+	 * 
+	 */
+    #endregion
+    /// <summary>
+    /// Summary description for CCryptoMD2.
+    /// </summary>	 
+    public class MD2Encryption
+    {
+
+        #region m_abRandom - Random nonlinear byte stream
+        /// <summary>
+        /// Permutation of 0..255 constructed from the digits of pi. It gives a
+        /// "random" nonlinear byte substitution operation.
+        /// </summary>
+        protected static byte[] m_abRandom = new byte[256]
+		{ 
+			41, 46, 67, 201, 162, 216, 124, 1, 61, 54, 84, 161, 236, 240, 6,
+			19, 98, 167, 5, 243, 192, 199, 115, 140, 152, 147, 43, 217, 188,
+			76, 130, 202, 30, 155, 87, 60, 253, 212, 224, 22, 103, 66, 111, 24,
+			138, 23, 229, 18, 190, 78, 196, 214, 218, 158, 222, 73, 160, 251,
+			245, 142, 187, 47, 238, 122, 169, 104, 121, 145, 21, 178, 7, 63,
+			148, 194, 16, 137, 11, 34, 95, 33, 128, 127, 93, 154, 90, 144, 50,
+			39, 53, 62, 204, 231, 191, 247, 151, 3, 255, 25, 48, 179, 72, 165,
+			181, 209, 215, 94, 146, 42, 172, 86, 170, 198, 79, 184, 56, 210,
+			150, 164, 125, 182, 118, 252, 107, 226, 156, 116, 4, 241, 69, 157,
+			112, 89, 100, 113, 135, 32, 134, 91, 207, 101, 230, 45, 168, 2, 27,
+			96, 37, 173, 174, 176, 185, 246, 28, 70, 97, 105, 52, 64, 126, 15,
+			85, 71, 163, 35, 221, 81, 175, 58, 195, 92, 249, 206, 186, 197,
+			234, 38, 44, 83, 13, 110, 133, 40, 132, 9, 211, 223, 205, 244, 65,
+			129, 77, 82, 106, 220, 55, 200, 108, 193, 171, 250, 36, 225, 123,
+			8, 12, 189, 177, 74, 120, 136, 149, 139, 227, 99, 232, 109, 233,
+			203, 213, 254, 59, 0, 29, 57, 242, 239, 183, 14, 102, 88, 208, 228,
+			166, 119, 114, 248, 235, 117, 75, 10, 49, 68, 80, 180, 143, 237,
+			31, 26, 219, 153, 141, 51, 159, 17, 131, 20
+		};
+        #endregion
+
+        #region byte[][] m_abPadding - padding 2D array
+        /// <summary>
+        /// The padding 2D array used by the encryptor/digest
+        /// </summary>
+        protected static byte[][] m_abPadding = new byte[17][]	
+		{
+			null,
+			new byte[ 1]{1},
+			new byte[ 2]{2,2},
+			new byte[ 3]{3,3,3},
+			new byte[ 4]{4,4,4,4},
+			new byte[ 5]{5,5,5,5,5},
+			new byte[ 6]{6,6,6,6,6,6},
+			new byte[ 7]{7,7,7,7,7,7,7},
+			new byte[ 8]{8,8,8,8,8,8,8,8},
+			new byte[ 9]{9,9,9,9,9,9,9,9,9},
+			new byte[10]{10,10,10,10,10,10,10,10,10,10},
+			new byte[11]{11,11,11,11,11,11,11,11,11,11,11},
+			new byte[12]{12,12,12,12,12,12,12,12,12,12,12,12},
+			new byte[13]{13,13,13,13,13,13,13,13,13,13,13,13,13},
+			new byte[14]{14,14,14,14,14,14,14,14,14,14,14,14,14,14},
+			new byte[15]{15,15,15,15,15,15,15,15,15,15,15,15,15,15,15},
+			new byte[16]{16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16}	
+		};
+        #endregion
+
+        /// <summary>
+        /// Default constructor
+        /// </summary>
+        protected MD2Encryption()
+        {
+        }//end default constructor()
+
+
+        /// <summary>
+        /// Sets the random array[256] used by the encrytion/digest. Checks
+        /// if the abRandom has a length of 256. If so sets the abRandom as
+        /// the random array[256] used by the encrytion/digest.
+        /// </summary>
+        /// <param name="abRandom">New random array[256] to be set.</param>
+        /// <returns>
+        /// true if abRandom is set as the random array[256] used
+        /// by the encrytion/digest, or else false.
+        ///  </returns>
+        public static bool SetRandomizer(byte[] abRandom)
+        {
+            bool bRetVal = false;
+
+            // Checking to see if abRandom array is of the proper length
+            if (abRandom.Length == 256)
+            {
+                m_abRandom = abRandom;
+                bRetVal = true;
+
+            }// end if
+
+            return bRetVal;
+
+        }// end SetRandomizer(..)
+
+
+        /// <summary>
+        /// Sets the padding array[17][] used by the encrytion/digest. Checks
+        /// if the abPadding has a length of 17 and checks if the length of the
+        /// inner array is equal to the main array index. 
+        /// [eg: ...,array[5][5],array[6][6],array[7][7]... ] 
+        /// If so sets the abPadding as the padding array[17][] used by the 
+        /// encrytion/digest.
+        /// </summary>
+        /// <param name="abPadding">
+        /// New random array[17][] to be set. abPadding must be 17 elements long
+        /// and the length of the inner array must be equal to the main array 
+        /// index.[eg: ...,array[5][5],array[6][6],array[7][7]... ] 
+        /// </param>
+        /// <returns>
+        /// true if abPadding is set as the random array[17][] used
+        /// by the encrytion/digest, or else false.
+        ///  </returns>
+        public static bool SetPadding(byte[][] abPadding)
+        {
+            bool bRetVal = false;
+            bool bIsArrayValid = true;
+
+            // Checking to see if abPadding array 1D is of the proper length
+            if (abPadding.Length == 17)
+            {
+                // Checking to see if abPadding array 2D is of the proper length
+                for (int i = 0; i < 17; i++)
+                    if (abPadding[i].Length == i)
+                        bIsArrayValid &= true;
+
+                // Checking is abPadding array has conforms to requirments
+                if (bIsArrayValid)
+                {
+                    m_abPadding = abPadding;
+                    bRetVal = true;
+                }// end if
+
+            }// end if
+
+            return bRetVal;
+
+        }// end fn SetPadding(..)
+
+
+
+
+        /// <summary>
+        /// Splits the abSource from the index give by nIndex and
+        /// retuns the resulting byte[]. If an error occurs return
+        /// null
+        /// </summary>
+        /// <param name="abSource">Source array to be split</param>
+        /// <param name="nIndex">Index the abSource array should be split</param>
+        /// <returns>byte[] when successful, else null</returns>
+        private static byte[] Split(byte[] abSource, UInt32 nIndex)
+        {
+            // Checking if the index given by nIndex is with the length of 
+            // the abSource array
+            if (abSource.Length > nIndex)
+            {
+                // Getting the length of the resulting array
+                UInt32 nArrayLength = (UInt32)abSource.Length - nIndex;
+
+                // Creating the resulten array of the proper length
+                byte[] abRetVal = new byte[nArrayLength];
+
+                // Copying the elements of abSource array to the resulten array
+                // starting from the index given by nIndex
+                for (int i = 0; i < nArrayLength; i++)
+                    abRetVal[i] = abSource[nIndex + i];
+
+                // Returning successfully populated resulten array 
+                return abRetVal;
+
+            }// end if
+            else
+            {
+                // nIndex is greater than abSource array length, returning null
+                return null;
+
+            }// end else
+
+        }//end fn Split
+
+
+        /// <summary>
+        /// MD2 basic transformation. Transforms state and updates checksum
+        /// based on block.
+        /// </summary>
+        /// <param name="oContext"></param>
+        /// <param name="block"></param>
+        private static void MD2Transform(ref MD2Context oContext, byte[] abBlock)
+        {
+            // Iterators used within this function
+            int i = 0;
+            int j = 0;
+            int t = 0;
+
+            // Array to hold the encryption block
+            byte[] x = new byte[48];
+
+            // Populating the encryption block array this context State information
+            for ( /*i=0*/; i < 16; i++)
+                x[i] = oContext.State[i];
+
+            // Populating the encryption block array this abBlock information
+            for (i = 0; i < 16; i++)
+                x[i + 16] = abBlock[i];
+
+            // Form encryption block from state, abBlock, State ^ abBlock.
+            for (i = 0; i < 16; i++)
+                x[i + 32] = (byte)(oContext.State[i] ^ abBlock[i]);
+
+            // Encrypt block (18 rounds).
+            for (i = 0/*,t = 0*/; i < 18; i++)
+            {
+                for (j = 0; j < 48; j++)
+                    t = x[j] ^= m_abRandom[t];
+                t = (t + i) & 0xff;
+
+            }// end for
+
+            // Save new state 			
+            for (i = 0; i < 16; i++)
+                oContext.State[i] = x[i];
+
+            // Update checksum.
+            for (i = 0, t = oContext.Checksum[15]; i < 16; i++)
+                t = oContext.Checksum[i] ^= m_abRandom[abBlock[i] ^ t];
+
+        }// end fn MD2Transform(..)
+
+
+        /// <summary>
+        /// MD2 block update operation. Continues an MD2 message-digest
+        /// operation, processing another message block, and updating the
+        /// context.
+        /// </summary>
+        /// <param name="oContext"></param>
+        /// <param name="abInput"></param>
+        /// <param name="nPos"></param>
+        private static void MD2Update(ref MD2Context oContext, byte[] abInput, UInt32 nPos)
+        {
+            // Iterator used within this function
+            UInt32 nIterator;
+            UInt32 nIndex = oContext.Count;
+            UInt32 nPartLen = 16 - nIndex;
+
+            // Getting the input part length
+            UInt32 nInputLength = (UInt32)abInput.Length - nPos;
+
+            // Setting the context count
+            oContext.Count = (nIndex + nInputLength) & 0xf;
+
+            // Copying the input part that is applicable
+            byte[] abInputPart = new byte[nInputLength];
+            //abInputPart = Split( abInput, nPos );
+            abInput.CopyTo(abInputPart, nPos);
+
+            // Transform as many times as possible.
+            if (nInputLength >= nPartLen)
+            {
+                for (int i = 0; i < nPartLen; i++)
+                    oContext.Buffer[nIndex + i] = abInputPart[i];
+
+                MD2Transform(ref oContext, oContext.Buffer);
+
+                for (nIterator = nPartLen; nIterator + 15 < nInputLength; nIterator += 16)
+                {
+                    //MD2Transform( ref oContext, Split( abInputPart, nIterator ) );
+                    byte[] abTemp = new byte[abInputPart.Length - nIterator];
+                    //abInputPart.CopyTo(abTemp, nIterator );					
+                    Array.Copy(abInputPart, nIterator, abTemp, 0, (abInputPart.Length - nIterator));
+                    MD2Transform(ref oContext, abTemp);
+                }
+
+                nIndex = 0;
+            }
+            else
+                nIterator = 0;
+
+            for (int i = 0; i < nInputLength - nIterator; i++)
+                oContext.Buffer[nIndex + i] = abInputPart[nIterator + i];
+
+        }// end fn MD2Update(..)
+
+
+
+        /// <summary>
+        /// MD2 finalization. Ends an MD2 message-digest operation, writing the
+        /// message digest to the State within the Context.
+        /// Steps
+        /// 1) Apply padding
+        /// 2) Extend with checksum and calculate the final digest
+        /// </summary>
+        /// <param name="oContext"></param>
+        private static void MD2Final(ref MD2Context oContext)
+        {
+            // Pad out to multiple of 16.
+            UInt32 nPadLength = 16 - oContext.Count;
+
+            // Apply padding
+            MD2Update(ref oContext, m_abPadding[nPadLength], 0);
+
+            // Extend with checksum 
+            MD2Update(ref oContext, oContext.Checksum, 0);
+
+        }// end fn MD2Final(..)
+
+
+        /// <summary>
+        /// Used for testing
+        /// </summary>
+        /// <param name="oContext"></param>
+        /// <param name="sLabel"></param>
+        private static void PrintContext(MD2Context oContext, string sLabel)
+        {
+            System.Console.WriteLine("=================== Start " + sLabel + " ===================");
+            System.Console.WriteLine(oContext.ToString());
+            System.Console.WriteLine("=================== End " + sLabel + " =====================");
+
+        }
+
+
+        /// <summary>
+        /// Digests the sInput and returns the result.
+        /// </summary>
+        /// <param name="sInput">string to be encrypted/digested</param>
+        /// <returns>string result of the encrypted/digested sInput string</returns>
+        public static string GetEncryptedText(string sPlainText)
+        {
+            string sEncryptedText = "";
+
+            MD2Context oContext = new MD2Context();
+            byte[] abDigest = new byte[16];
+            int nLength;
+
+            // Checking if input exists
+            if (sPlainText != null && sPlainText.Length > 0)
+            {
+
+                MD2Update(ref oContext, Encoding.UTF8.GetBytes(sPlainText), 0);
+
+                MD2Final(ref oContext);
+
+                nLength = oContext.State.Length;
+                for (int i = 0; i < nLength; i++)
+                    sEncryptedText += oContext.State[i].ToString("x").PadLeft(2, '0');
+
+            }// end if
+
+            return sEncryptedText;
+
+        }// end fn Encrypt
+
+    }// end class
+}
