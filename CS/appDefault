@@ -1,0 +1,69 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Configuration;
+
+namespace Vantage.BusinessLogicLayer
+{
+    public partial class ApplicationDefault
+    {
+        public const EmployeeBL.DesignationEnum DISTRIBUTOR_MANAGER = EmployeeBL.DesignationEnum.AssistantSalesManager;
+        public static string REORDERLEVEL_ITEMTYPE_UPLOAD_FILE = "RORIT";
+        public static string RETAILER_TARGETS_UPLOAD_FILE = "RTUF";
+        public static string EMPLOYEE_TARGETS_UPLOAD_FILE = "ETA";
+        public static string  COMMISSIONUSER_USER_UPLOAD_FILE = "CUF";
+        public static string EMPLOYEE_TARGET_POINTLS_UPLOAD_FILE = "ETP";
+        public static string COMMISSIONUSER_USER_BLOCK_UPLOAD_FILE = "CUBUF";
+        public static string DN_RECYCLE_UPLOAD_FILE = "DRUF";
+        public static string DN_RECYCLE_REVERSEUPLOAD_FILE = "DRRUF";
+        public static int TARGET_PERCENTAGE = 4 ;
+        public static DateTime BAS_ProcessStartTime = Convert.ToDateTime("01/01/1900 " + DateTime.Now.Hour.ToString() + ":00:00");//process set hourly from 00:00:00
+        public static int BAS_ProcessDuration_Min = 8;
+        private static string _ConnectionString = null;
+        public static string ConnectionString
+        {
+            get
+            {
+                if (_ConnectionString == null)
+                {
+                    _ConnectionString = ConfigurationManager.ConnectionStrings["VantageConnectionString"].ConnectionString;
+                }
+                return _ConnectionString;
+            }
+        }
+
+        public static bool IsDistributorSelectionEnable_AD(EmployeeBL.DesignationEnum designationEnum)
+        {
+            if (designationEnum == EmployeeBL.DesignationEnum.SalesRep
+                || designationEnum == EmployeeBL.DesignationEnum.DistributorOperator)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public static string ReportConnectionString
+        {
+            get
+            {
+                return ConfigurationManager.ConnectionStrings["VantageReportConnectionString"].ConnectionString;
+            }
+        }
+
+        //public static EmployeeBL.DesignationEnum GetManagerMapping(EmployeeBL.DesignationEnum childAgentEnum)
+        //{
+        //    if (childAgentEnum == EmployeeBL.DesignationEnum.SalesRep || childAgentEnum == EmployeeBL.DesignationEnum.DistributorSalesRep
+        //         || childAgentEnum == EmployeeBL.DesignationEnum.DistributorOperator || childAgentEnum == EmployeeBL.DesignationEnum.DistributorAdmin)
+        //        return EmployeeBL.DesignationEnum.DistributorOwner;
+        //    else if (childAgentEnum == EmployeeBL.DesignationEnum.DistributorOwner)
+        //        return EmployeeBL.DesignationEnum.AreaSalesManager;
+        //    else if (childAgentEnum == EmployeeBL.DesignationEnum.AreaSalesManager)
+        //        return EmployeeBL.DesignationEnum.SalesManager;
+        //    else if (childAgentEnum == EmployeeBL.DesignationEnum.SalesManager)
+        //        return EmployeeBL.DesignationEnum.NationalSalesManager;
+        //    else
+        //        return EmployeeBL.DesignationEnum.Null;
+        //}
+    }
+}
