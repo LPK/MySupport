@@ -1,0 +1,3431 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.OleDb;
+using System.Linq;
+using System.Text;
+using System.Transactions;
+using Subgurim.Controles;
+using System.IO;
+
+namespace Vantage.BusinessLogicLayer
+{
+    public partial class OutletBL
+    {
+        public enum StatusEnum
+        {
+            NULL = 0,
+            CommissionBlock = 2
+        }
+
+        public string ID { get; set; }
+        public int? mpt_TypeUID { get; set; }
+        public string Fax { get; set; }
+        public string ID2 { get; set; }
+        public string Name { get; set; }
+        public int? DistrictUID { get; set; }
+        public byte MaxOutstandingInvoiceCount { get; set; }
+        public string City { get; set; }
+        public string StreetAddress { get; set; }
+        public int? TownUID { get; set; }
+        public decimal? CreditLimit { get; set; }
+        public int? CategoryLeafLevelUID { get; set; }
+        public string OwnerName { get; set; }
+        public Int16 CreditPeriod { get; set; }
+        public int? SalePriceListUID { get; set; }
+        public int? BusinessAreaUID { get; set; }
+        public bool IsCash { get; set; }
+        public int? mpt_GroupUID { get; set; }
+        public string Telephone1 { get; set; }
+        public string Tel { get; set; }
+        public string VATNumber { get; set; }
+        public int? mpt_ClassUID { get; set; }
+        public string Email { get; set; }
+        public string ShopNote { get; set; }
+        public int DistributorUID { get; set; }
+        public int? RouteUID { get; set; }
+        public byte? mpt_StatusEnum { get; set; }
+
+
+        public DataSet GetShortList_OU(int? distributorUID, UserCredential credential)
+        {
+            if (credential.DistributorUID.HasValue)
+                distributorUID = credential.DistributorUID.Value;
+
+            if (!distributorUID.HasValue)
+                return null;
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                string cmdText = String.Format(
+                    "SELECT O.UID, O.Name {0} O.StreetAddress AS Name " +
+                    "FROM Outlet O " +
+                    "   INNER JOIN DistributorOutlet D ON O.UID = D.OutletUID " +
+                    "WHERE D.DistributorUID = {1} AND O.ExpiryDate IS NULL AND D.ExpiryDate IS NULL",
+                    DbHelper.CONCAT, distributorUID.Value);
+
+                OleDbCommand command = new OleDbCommand(cmdText, connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                return dataSet;
+            }
+        }
+
+        public DataSet GetShortListForCommision_OU(int? distributorUID, UserCredential credential)
+        {
+            if (credential.DistributorUID.HasValue)
+                distributorUID = credential.DistributorUID.Value;
+
+            //if (distributorUID <= 0 )
+            //   return null;
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {           
+                StringBuilder cmdBuilder = new StringBuilder();
+
+                cmdBuilder.Append(" SELECT DISTINCT O.UID, O.Name, ( O.ID +' - '+ O.Name ) AS Description ");
+                cmdBuilder.Append(" FROM Outlet O ");
+                cmdBuilder.Append(" INNER JOIN DistributorOutlet DO ON O.UID = DO.OutletUID   ");
+                cmdBuilder.Append(" INNER JOIN Distributor D ON DO.DistributorUID = D.UID   ");
+                cmdBuilder.AppendFormat(" WHERE D.ExpiryDate IS NULL AND ISNULL(O.mpt_TypeEnum,0) = 1 AND  DO.ExpiryDate IS NULL AND  ISNULL(D.mpt_TypeEnum,0) != 1 ");
+                if(distributorUID.HasValue)
+                    cmdBuilder.AppendFormat(" AND D.UID = {0} ", distributorUID.Value);
+                cmdBuilder.Append(" ORDER BY O.Name");
+
+                OleDbCommand command = new OleDbCommand(cmdBuilder.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                return dataSet;
+            }
+        }
+
+        public DataSet GetShortListByRoute_OU(int routeUID)
+        {
+            if (routeUID < 1)
+                return null;
+
+            StringBuilder cmdBuilder = new StringBuilder();
+
+            cmdBuilder.Append("SELECT O.UID, O.Name");
+            cmdBuilder.Append(" FROM Outlet O");
+            cmdBuilder.Append(" INNER JOIN RouteOutlet RO ON O.UID = RO.OutletUID");
+            cmdBuilder.AppendFormat(" WHERE RO.RouteUID = {0} AND RO.ExpiryDate IS NULL", routeUID);
+            cmdBuilder.Append(" AND O.ExpiryDate IS NULL");
+            cmdBuilder.Append(" ORDER BY O.Name");
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+            return dataSet;
+        }
+
+        /// <summary>
+        /// Get Retailers according to the dealer - all dealer
+        /// </summary>
+        /// <param name="distributorUID"></param>
+        /// <param name="credintial"></param>
+        /// <returns></returns>
+        public DataSet GetShortList_OU(int distributorUID, UserCredential credintial)
+        {
+            if (distributorUID < 1)
+                return null;
+
+            StringBuilder cmdBuilder = new StringBuilder();
+            cmdBuilder.Append("SELECT O.UID, O.Name");
+            cmdBuilder.Append(" FROM Outlet O");
+            cmdBuilder.Append(" INNER JOIN DistributorOutlet D ON O.UID = D.OutletUID");
+            cmdBuilder.Append(" WHERE O.ExpiryDate is null");
+            if (distributorUID > 0)
+                cmdBuilder.AppendFormat(" AND D.DistributorUID = {0}", distributorUID);
+            cmdBuilder.Append(" ORDER BY O.Name");
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+            return dataSet;
+        }
+
+        //for call
+        public DataSet GetShortList_OU(int distributorUID, int agentUID, int routeUID)
+        {
+            if (distributorUID < 1 && agentUID < 1)
+                return null;
+
+            StringBuilder cmdBuilder = new StringBuilder();
+
+            cmdBuilder.Append("SELECT O.UID, O.Name,CASE WHEN ISNULL(O.mpt_TypeEnum,0) = 1 THEN CAST(O.TLRNumber AS VARCHAR(32)) ELSE O.ID END + ' - ' + O.Name AS ID");
+            cmdBuilder.Append(" FROM Outlet O");
+
+            if (distributorUID > 0)
+                cmdBuilder.AppendFormat(" INNER JOIN DistributorOutlet DO ON O.UID = DO.OutletUID AND DO.DistributorUID = {0}", distributorUID);
+            if (agentUID > 0)
+                cmdBuilder.AppendFormat(" INNER JOIN AgentOutlet AO ON O.UID = AO.OutletUID AND AO.AgentUID = {0}", agentUID);
+            if (routeUID > 0)
+            {
+                cmdBuilder.Append(" INNER JOIN RouteOutlet RO ON O.UID = RO.OutletUID");
+                cmdBuilder.AppendFormat(" WHERE RO.RouteUID = {0} AND RO.ExpiryDate IS NULL", routeUID);
+                cmdBuilder.Append(" AND O.ExpiryDate IS NULL");
+            }
+            else
+                cmdBuilder.Append(" WHERE O.ExpiryDate IS NULL");
+            cmdBuilder.Append(" ORDER BY O.Name");
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+            return dataSet;
+        }
+
+        public static OutletBL GetOutlet_OU(int uid)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder cmdBuilder = new StringBuilder();
+
+                cmdBuilder.Append("SELECT O.ID, O.mpt_TypeUID, O.Fax, O.ID2, O.Name, O.MaxOutstandingInvoiceCount, O.City, O.StreetAddress, O.CreditLimit, O.OwnerName, O.CreditPeriod, O.SalePriceListUID, O.IsCash, O.mpt_GroupUID, O.Telephone1, SUBSTRING(O.Telephone1, 4, 7) AS Tel, O.VATNumber, O.mpt_ClassUID, O.Email, MiscData, DO.DistributorUID ");
+                cmdBuilder.Append(" ,AD.UID AS DistrictUID");
+                cmdBuilder.Append(" ,AT.UID AS TownUID");
+                cmdBuilder.AppendFormat(" ,O.OutletCategory{0}UID AS CategoryLeafLevelUID", (byte)OutletCategoryBL.LeafLevel);
+                cmdBuilder.Append(" ,AB.UID AS BusinessAreaUID");
+                cmdBuilder.Append(" ,RO.RouteUID, O.mpt_StatusEnum");
+                cmdBuilder.Append(" FROM Outlet O");
+                cmdBuilder.Append(" LEFT OUTER JOIN DistributorOutlet DO ON O.UID = DO.OutletUID AND DO.ExpiryDate IS NULL");
+                cmdBuilder.Append(" LEFT OUTER JOIN RouteOutlet RO ON O.UID = RO.OutletUID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AT ON O.AreaUID = AT.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AD ON AT.ParentUID = AD.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AB ON O.BusinessAreaUID = AB.UID");
+
+                cmdBuilder.AppendFormat(" WHERE O.UID={0}", uid);
+
+                DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+                object objmpt_TypeUID = null;
+                object objFax = null;
+                object objID2 = null;
+                object objName = null;
+                object objMaxOutstandingInvoiceCount = null;
+                object objCity = null;
+                object objStreetAddress = null;
+                object objCreditLimit = null;
+                object objOwnerName = null;
+                object objCreditPeriod = null;
+                object objSalePriceListUID = null;
+                object objIsCash = null;
+                object objmpt_GroupUID = null;
+                object objTelephone1 = null;
+                object objTel = null;
+                object objVATNumber = null;
+                object objmpt_ClassUID = null;
+                object objEmail = null;
+                object objMiscData = null;
+                object objDistrictUID = null;
+                object objTownUID = null;
+                object objCategoryLeafLevelUID = null;
+                object objBusinessAreaUID = null;
+                object objDistributorUID = null;
+                object objRouteUID = null;
+                object obStatusEnum = null;
+
+                if (dataSet.Tables[0].Rows.Count > 0)
+                {
+                    OutletBL outlet = new OutletBL();
+
+                    outlet.ID = dataSet.Tables[0].Rows[0].Field<string>("ID");
+                    objmpt_TypeUID = dataSet.Tables[0].Rows[0].Field<object>("mpt_TypeUID");
+                    if (objmpt_TypeUID != null && Convert.ToInt32(objmpt_TypeUID) != 0)
+                        outlet.mpt_TypeUID = dataSet.Tables[0].Rows[0].Field<int>("mpt_TypeUID");
+
+                    objFax = dataSet.Tables[0].Rows[0].Field<object>("Fax");
+                    if (objFax != null)
+                        outlet.Fax = dataSet.Tables[0].Rows[0].Field<string>("Fax");
+
+                    objID2 = dataSet.Tables[0].Rows[0].Field<object>("ID2");
+                    if (objID2 != null)
+                        outlet.ID2 = dataSet.Tables[0].Rows[0].Field<string>("ID2");
+                    objName = dataSet.Tables[0].Rows[0].Field<object>("Name");
+                    if (objName != null)
+                        outlet.Name = dataSet.Tables[0].Rows[0].Field<string>("Name");
+                    objMaxOutstandingInvoiceCount = dataSet.Tables[0].Rows[0].Field<object>("MaxOutstandingInvoiceCount");
+                    if (objMaxOutstandingInvoiceCount != null)
+                        outlet.MaxOutstandingInvoiceCount = dataSet.Tables[0].Rows[0].Field<byte>("MaxOutstandingInvoiceCount");
+                    objCity = dataSet.Tables[0].Rows[0].Field<object>("City");
+                    if (objCity != null)
+                        outlet.City = dataSet.Tables[0].Rows[0].Field<string>("City");
+                    objStreetAddress = dataSet.Tables[0].Rows[0].Field<object>("StreetAddress");
+                    if (objStreetAddress != null)
+                        outlet.StreetAddress = dataSet.Tables[0].Rows[0].Field<string>("StreetAddress");
+                    objCreditLimit = dataSet.Tables[0].Rows[0].Field<object>("CreditLimit");
+                    if (objCreditLimit != null)
+                        outlet.CreditLimit = dataSet.Tables[0].Rows[0].Field<decimal>("CreditLimit");
+                    objOwnerName = dataSet.Tables[0].Rows[0].Field<object>("OwnerName");
+                    if (objOwnerName != null)
+                        outlet.OwnerName = dataSet.Tables[0].Rows[0].Field<string>("OwnerName");
+                    objCreditPeriod = dataSet.Tables[0].Rows[0].Field<object>("CreditPeriod");
+                    if (objCreditPeriod != null)
+                        outlet.CreditPeriod = dataSet.Tables[0].Rows[0].Field<Int16>("CreditPeriod");
+                    objSalePriceListUID = dataSet.Tables[0].Rows[0].Field<object>("SalePriceListUID");
+                    if (objSalePriceListUID != null)
+                        outlet.SalePriceListUID = dataSet.Tables[0].Rows[0].Field<int>("SalePriceListUID");
+                    objIsCash = dataSet.Tables[0].Rows[0].Field<object>("IsCash");
+                    if (objIsCash != null)
+                        outlet.IsCash = dataSet.Tables[0].Rows[0].Field<bool>("IsCash");
+                    objmpt_GroupUID = dataSet.Tables[0].Rows[0].Field<object>("mpt_GroupUID");
+                    if (objmpt_GroupUID != null && Convert.ToInt32(objmpt_GroupUID) != 0)
+                        outlet.mpt_GroupUID = dataSet.Tables[0].Rows[0].Field<int>("mpt_GroupUID");
+                    objTelephone1 = dataSet.Tables[0].Rows[0].Field<object>("Telephone1");
+                    if (objTelephone1 != null)
+                        outlet.Telephone1 = dataSet.Tables[0].Rows[0].Field<string>("Telephone1");
+                    objTel = dataSet.Tables[0].Rows[0].Field<object>("Tel");
+                    if (objTel != null)
+                        outlet.Tel = dataSet.Tables[0].Rows[0].Field<string>("Tel");
+                    objVATNumber = dataSet.Tables[0].Rows[0].Field<object>("VATNumber");
+                    if (objVATNumber != null)
+                        outlet.VATNumber = dataSet.Tables[0].Rows[0].Field<string>("VATNumber");
+                    objmpt_ClassUID = dataSet.Tables[0].Rows[0].Field<object>("mpt_ClassUID");
+                    if (objmpt_ClassUID != null && Convert.ToInt32(objmpt_ClassUID) != 0)
+                        outlet.mpt_ClassUID = dataSet.Tables[0].Rows[0].Field<int>("mpt_ClassUID");
+                    objEmail = dataSet.Tables[0].Rows[0].Field<object>("Email");
+                    if (objEmail != null)
+                        outlet.Email = dataSet.Tables[0].Rows[0].Field<string>("Email");
+                    objMiscData = dataSet.Tables[0].Rows[0].Field<object>("MiscData");
+                    if (objEmail != null)
+                        outlet.ShopNote = dataSet.Tables[0].Rows[0].Field<string>("MiscData");
+                    objDistrictUID = dataSet.Tables[0].Rows[0].Field<object>("DistrictUID");
+                    if (objDistrictUID != null && Convert.ToInt32(objDistrictUID) != 0)
+                        outlet.DistrictUID = dataSet.Tables[0].Rows[0].Field<int>("DistrictUID");
+                    objTownUID = dataSet.Tables[0].Rows[0].Field<object>("TownUID");
+                    if (objTownUID != null && Convert.ToInt32(objTownUID) != 0)
+                        outlet.TownUID = dataSet.Tables[0].Rows[0].Field<int>("TownUID");
+                    objCategoryLeafLevelUID = dataSet.Tables[0].Rows[0].Field<object>("CategoryLeafLevelUID");
+                    if (objCategoryLeafLevelUID != null && Convert.ToInt32(objCategoryLeafLevelUID) != 0)
+                        outlet.CategoryLeafLevelUID = dataSet.Tables[0].Rows[0].Field<int>("CategoryLeafLevelUID");
+                    objBusinessAreaUID = dataSet.Tables[0].Rows[0].Field<object>("BusinessAreaUID");
+                    if (objBusinessAreaUID != null && Convert.ToInt32(objBusinessAreaUID) != 0)
+                        outlet.BusinessAreaUID = dataSet.Tables[0].Rows[0].Field<int>("BusinessAreaUID");
+                    objDistributorUID = dataSet.Tables[0].Rows[0].Field<object>("DistributorUID");
+                    if (objDistributorUID != null && Convert.ToInt32(objDistributorUID) != 0)
+                        outlet.DistributorUID = dataSet.Tables[0].Rows[0].Field<int>("DistributorUID");
+                    objRouteUID = dataSet.Tables[0].Rows[0].Field<object>("RouteUID");
+                    if (objRouteUID != null && Convert.ToInt32(objRouteUID) != 0)
+                        outlet.RouteUID = dataSet.Tables[0].Rows[0].Field<int>("RouteUID");
+                    obStatusEnum = dataSet.Tables[0].Rows[0].Field<object>("mpt_StatusEnum");
+                    if (obStatusEnum != null && Convert.ToByte(obStatusEnum) != 0)
+                        outlet.mpt_StatusEnum = dataSet.Tables[0].Rows[0].Field<byte>("mpt_StatusEnum");
+
+                    return outlet;
+                }
+                return null;
+            }
+        }
+
+        // master - view
+        public DataSet Get_OU(int? channelUID, int? outletCategoryUID, int? distributorUID, bool? isActive, UserCredential credential)
+        {
+            CacheBL cacheBL = new CacheBL();
+            string rawKey = "Outlets";
+
+            if (!outletCategoryUID.HasValue || outletCategoryUID.Value < 1)
+                return null;
+
+            if (credential.DistributorUID.HasValue)
+            {
+                distributorUID = credential.DistributorUID.Value;
+            }
+
+            rawKey = string.Concat(rawKey, "-", channelUID, "-", distributorUID, "-", outletCategoryUID.Value);
+
+            // See if the item is in the cache
+            DataSet outlets = cacheBL.GetCacheItem(rawKey, (int)CacheBL.CacheKey.OutletCache) as DataSet;
+
+            if (outlets == null)
+            {
+                OutletCategoryBL.DepthEnum depthEnum = OutletCategoryBL.DepthEnum.Null;
+                object obj = new DbHelper().GetScalarByUID(DbHelper.T_OutletCategory, DbHelper.C_Depth, outletCategoryUID.Value);
+                if (obj != DBNull.Value)
+                    depthEnum = (OutletCategoryBL.DepthEnum)((byte)obj);
+
+                StringBuilder cmdBuilder = new StringBuilder();
+                StringBuilder whereBuilder = new StringBuilder();
+
+                cmdBuilder.Append("SELECT O.UID, O.ID, O.Name, O.ExpiryDate, O.CreditLimit, O.CreditPeriod, O.StreetAddress, O.Telephone1, O.ExpiryDate, O.IsCash, O.AreaUID1 AS SubTownUID, O.BusinessAreaUID, O.SalePriceListUID AS PriceListUID, O.Fax, O.Email, O.MaxOutstandingInvoiceCount, O.ID2");
+                cmdBuilder.AppendFormat(", O.OutletCategory{0}UID AS CategoryLeafLevelUID", (byte)OutletCategoryBL.LeafLevel);
+                cmdBuilder.Append(", O.mpt_TypeUID, O.mpt_GroupUID,O.mpt_ClassUID, O.OwnerName, O.VATNumber, O.MiscData, O.City, O.TLRNumber, O.PCSIM, O.PCVoucher, O.PCReload");
+                cmdBuilder.Append(", O.mpt_StatusEnum, PL.ID AS PriceList , O.LastModifiedDate AS ModifiedDate");
+                cmdBuilder.Append(", AT.UID AS TownUID, AT.Description AS Town");
+                cmdBuilder.Append(", AD.UID AS DistrictUID, AD.Description AS District");
+                cmdBuilder.Append(", AB.UID AS BusinessAreaUID, AB.Description AS BusinessArea");
+                cmdBuilder.Append(", CASE WHEN (O.VatNumber IS NULL OR LEN(O.VatNumber)=0) THEN 'No' ELSE 'Yes' END AS VatStatus");
+                cmdBuilder.Append(", MT.MiscData AS OutletType");
+                cmdBuilder.Append(", MG.MiscData AS OutletGroup");
+                cmdBuilder.Append(", MC.MiscData AS OutletClass");
+                cmdBuilder.Append(", O.IsFreelanceAgent AS IsFreelanceAgent ");
+                cmdBuilder.Append(", A.TLSNumber ");
+                cmdBuilder.Append(" FROM Outlet O");
+
+                if (distributorUID.HasValue)
+                {
+                    cmdBuilder.AppendFormat(" INNER JOIN DistributorOutlet DO ON O.UID = DO.OutletUID AND DO.ExpiryDate IS NULL AND DO.DistributorUID = {0} ", distributorUID.Value);
+                    cmdBuilder.Append("INNER JOIN Distributor DD ON DO.DistributorUID = DD.UID");
+                }
+                else if(channelUID.HasValue)
+                {
+                    cmdBuilder.Append(" INNER JOIN DistributorOutlet DO ON O.UID = DO.OutletUID AND DO.ExpiryDate IS NULL");
+                    cmdBuilder.AppendFormat(" INNER JOIN Distributor D ON DO.DistributorUID = D.UID AND D.mpt_ChannelUID = {0} AND D.ExpiryDate IS NULL", channelUID);
+
+                    if (whereBuilder.Length > 0) whereBuilder.Append(" AND");
+                         whereBuilder.Append(" ISNULL(D.mpt_TypeEnum,0) <> 1");
+                    //if (isSimonly)
+                    //{
+                    //    if (whereBuilder.Length > 0) whereBuilder.Append(" AND");
+                    //    whereBuilder.Append(" ISNULL(D.mpt_TypeEnum,0) = 1");
+                    //}
+                    //else {
+                    //    if (whereBuilder.Length > 0) whereBuilder.Append(" AND");
+                    //    whereBuilder.Append(" ISNULL(D.mpt_TypeEnum,0) <> 1");
+                    //}
+                }
+              
+                cmdBuilder.Append(" LEFT OUTER JOIN PriceList PL ON O.SalePriceListUID = PL.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN ");
+                cmdBuilder.Append(" ( ");
+                cmdBuilder.Append("     SELECT AO.AgentUID,AO.OutletUID,AO.CreationDate ");
+                cmdBuilder.Append("     FROM AgentOutlet AO ");
+                cmdBuilder.Append("             INNER JOIN (  ");
+                cmdBuilder.Append("             SELECT AOT.OutletUID,MAX(AOT.CreationDate) AS MaxCreationDate ");
+                cmdBuilder.Append("             FROM AgentOutlet AOT ");
+                cmdBuilder.Append("             GROUP BY AOT.OutletUID ");
+                cmdBuilder.Append("     )EP ON AO.OutletUID = EP.OutletUID AND AO.CreationDate = EP.MaxCreationDate ");
+                cmdBuilder.Append(" )KK ON O.UID = KK.OutletUID ");
+                cmdBuilder.Append(" LEFT OUTER JOIN Agent A ON KK.AgentUID = A.UID"); 
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AB ON O.BusinessAreaUID = AB.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AT ON O.AreaUID = AT.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AD ON AT.ParentUID = AD.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultipurposeTag MT ON O.mpt_TypeUID = MT.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultipurposeTag MG ON O.mpt_GroupUID = MG.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultipurposeTag MC ON O.mpt_ClassUID = MC.UID");
+
+                if (depthEnum != OutletCategoryBL.DepthEnum.Level1)
+                {
+                    if (whereBuilder.Length > 0)
+                        whereBuilder.Append(" AND");
+                    if (depthEnum == OutletCategoryBL.DepthEnum.Level2)
+                        whereBuilder.Append(" O.OutletCategory2UID = " + outletCategoryUID.Value);
+                    else if (depthEnum == OutletCategoryBL.DepthEnum.Level3)
+                        whereBuilder.Append(" O.OutletCategory3UID = " + outletCategoryUID.Value);
+                    else if (depthEnum == OutletCategoryBL.DepthEnum.Level4)
+                        whereBuilder.Append(" O.OutletCategory4UID = " + outletCategoryUID.Value);
+                    else if (depthEnum == OutletCategoryBL.DepthEnum.Level5)
+                        whereBuilder.Append(" O.OutletCategory5UID = " + outletCategoryUID.Value);
+                }
+                //if (distributorUID.HasValue)
+                //{
+                //    if (whereBuilder.Length > 0) whereBuilder.Append(" AND");
+                //    whereBuilder.Append(" DO.ExpiryDate IS NULL AND DO.DistributorUID = " + distributorUID.Value);
+                //}
+                if (isActive.HasValue)
+                {
+                    if (whereBuilder.Length > 0) whereBuilder.Append(" AND");
+                    if (isActive.Value)
+                        whereBuilder.Append(" O.ExpiryDate IS NULL");
+                    else
+                        whereBuilder.Append(" O.ExpiryDate IS NOT NULL");
+                }
+
+                if (whereBuilder.Length > 0) whereBuilder.Append(" AND");                
+                whereBuilder.Append(" ISNULL(A.mpt_TypeEnum,0) <> 1 ");
+
+                if (whereBuilder.Length > 0)
+                {
+                    cmdBuilder.Append(" WHERE");
+                    cmdBuilder.Append(whereBuilder);
+                }
+
+                cmdBuilder.Append(" ORDER BY O.Name");
+
+                outlets = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+                cacheBL.AddCacheItem(rawKey, outlets, (int)CacheBL.CacheKey.OutletCache);
+            }
+
+            return outlets;
+        }
+
+        public DataSet Get_OU(int routeUID)
+        {
+            if (routeUID < 1)
+                return null;
+
+            StringBuilder cmdBuilder = new StringBuilder();
+
+            cmdBuilder.Append("SELECT O.UID, O.ID, O.Name");
+            cmdBuilder.Append(" FROM Outlet O");
+            cmdBuilder.Append(" INNER JOIN RouteOutlet RO ON O.UID = RO.OutletUID");
+            cmdBuilder.AppendFormat(" WHERE RO.RouteUID = {0} AND RO.ExpiryDate IS NULL", routeUID);
+            cmdBuilder.Append(" AND O.ExpiryDate IS NULL");
+            cmdBuilder.Append(" ORDER BY O.Name");
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+            return dataSet;
+        }
+
+        public DataSet Get_OU(int agentUID, int? routeUID)
+        {
+            if (routeUID < 1)
+                routeUID = null;
+
+            StringBuilder cmdBuilder = new StringBuilder();
+
+            cmdBuilder.Append("SELECT O.UID, O.ID, O.Name");
+            cmdBuilder.Append(" FROM Outlet O");
+            if (routeUID.HasValue)
+            {
+                cmdBuilder.Append(" INNER JOIN RouteOutlet RO ON O.UID = RO.OutletUID");
+                cmdBuilder.AppendFormat(" WHERE RO.RouteUID = {0} AND RO.ExpiryDate IS NULL", routeUID);
+            }
+            else
+            {
+                cmdBuilder.Append(" INNER JOIN AgentOutlet AO ON O.UID = AO.OutletUID");
+                cmdBuilder.AppendFormat(" WHERE AO.AgentUID = {0} AND AO.ExpiryDate IS NULL", agentUID);
+            }
+            cmdBuilder.Append(" AND O.ExpiryDate IS NULL AND (O.mpt_TypeEnum IS NULL OR O.mpt_TypeEnum != 1)");
+            cmdBuilder.Append(" ORDER BY O.Name");
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+            return dataSet;
+        }
+
+        public void DeletePhoneNumber_OU(int uid, int outletUID)
+        {
+            using (VantageEntities db = new VantageEntities())
+            {
+                OutletTelephone ot = db.OutletTelephone.First(p => p.UID == uid);
+
+                if (Convert.ToBoolean(ot.IsDefault))
+                {
+                    db.ExecuteStoreCommand("UPDATE Outlet SET TLRNumber = null WHERE UID = {0}", outletUID);
+                }
+
+                db.OutletTelephone.DeleteObject(ot);
+
+                db.SaveChanges();
+            }
+        }
+
+        public void SavePhoneNumber_OU(int? uid, int outletUID, int phoneNumber, bool isDefault, UserCredential credintial)
+        {
+            using (VantageEntities db = new VantageEntities())
+            {
+                if (uid.HasValue)
+                {
+                    OutletTelephone outletTel = db.OutletTelephone.First(p => p.UID == uid.Value);
+                    OutletTelephone tel = db.OutletTelephone.FirstOrDefault(p => p.OutletUID == outletUID && p.PhoneNumber == phoneNumber && p.UID != uid);
+                    if (tel != null)
+                        throw new Exception("Phone no already exist for retailor.");
+                    outletTel.PhoneNumber = phoneNumber;
+                    if (isDefault)
+                    {
+                        OutletTelephone otel = db.OutletTelephone.FirstOrDefault(p => p.OutletUID == outletUID && p.IsDefault == true && p.UID != uid);
+                        if (otel != null)
+                            throw new Exception("Retailer already have a default phone no.");
+                        else
+                        {
+                            outletTel.IsDefault = isDefault;
+                            Outlet outlet = db.Outlet.First(p => p.UID == outletUID);
+                            db.ExecuteStoreCommand("UPDATE Outlet SET TLRNumber = {0} WHERE UID = {1}", phoneNumber, outletUID);
+                        }
+                    }
+                    else
+                    {
+                        outletTel.IsDefault = isDefault;
+                        Outlet outlet = db.Outlet.First(p => p.UID == outletUID);
+                        if (outletTel.PhoneNumber == outlet.TLRNumber)
+                            outlet.TLRNumber = null;
+                    }
+                }
+                else
+                {
+                    OutletTelephone outletTel = new OutletTelephone();
+                    outletTel.OutletUID = outletUID;
+                    OutletTelephone tel = db.OutletTelephone.FirstOrDefault(p => p.OutletUID == outletUID && p.PhoneNumber == phoneNumber);
+                    if (tel != null)
+                        throw new Exception("Phone no already exist for retailor.");
+                    outletTel.PhoneNumber = phoneNumber;
+                    OutletTelephone outletT = db.OutletTelephone.FirstOrDefault(p => p.OutletUID == outletUID);
+                    if (outletT != null)
+                    {
+                        if (isDefault)
+                        {
+                            OutletTelephone tele = db.OutletTelephone.FirstOrDefault(p => p.OutletUID == outletUID && p.IsDefault == true);
+                            if (tele != null)
+                                throw new Exception("Retailer already have a default phone no.");
+                            db.ExecuteStoreCommand("UPDATE Outlet SET TLRNumber = {0} WHERE UID = {1}", phoneNumber, outletUID);
+                        }
+                        outletTel.IsDefault = isDefault;
+                    }
+                    else
+                    {
+                        outletTel.IsDefault = true;
+                        Outlet outlet = db.Outlet.First(p => p.UID == outletUID);
+                        db.ExecuteStoreCommand("UPDATE Outlet SET TLRNumber = {0} WHERE UID = {1}", phoneNumber, outletUID);
+                    }
+                    db.OutletTelephone.AddObject(outletTel);
+                }
+                db.SaveChanges();
+            }
+        }
+
+        public DataSet GetPhoneNumbers_OU(int outletUID)
+        {
+            StringBuilder commandString = new StringBuilder(
+                                          "SELECT O.UID, O.PhoneNumber, O.IsDefault, RIGHT(STR(O.PhoneNumber),7) AS Phone " +
+                                          "FROM OutletTelephone O " +
+                                          "WHERE O.OutletUID = " + outletUID);
+
+            DataSet dataSet = new DbHelper().GetDataSet(commandString.ToString());
+
+            return dataSet;
+        }
+
+        public static DataSet GetByAgent_OU(int? agentUID, UserCredential credintial)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder cmdBuilder = new StringBuilder();
+                StringBuilder whereBuilder = new StringBuilder();
+
+                if (agentUID.HasValue)
+                {
+                    #region SELECT
+                    cmdBuilder.Append("SELECT OU.UID, OU.ID, OU.Name, OU.StreetAddress");
+                    cmdBuilder.Append(", DIO.SequenceNumber");
+                    cmdBuilder.Append(", MG.MiscData AS Group_");
+                    cmdBuilder.Append(", MT.MiscData AS Type");
+                    cmdBuilder.Append(", AST.Description AS SubTown");
+                    cmdBuilder.Append(", AR.Description AS Town");
+                    cmdBuilder.Append(", AR1.Description AS District");
+                    cmdBuilder.Append(" FROM Outlet OU");
+                    #endregion
+
+                    #region JOIN
+                    cmdBuilder.Append(" INNER JOIN AgentOutlet DIO ON OU.UID = DIO.OutletUID");
+                    cmdBuilder.Append(" LEFT OUTER JOIN Area AST ON OU.AreaUID1 = AST.UID");
+                    cmdBuilder.Append(" INNER JOIN Area AR ON OU.AreaUID = AR.UID");
+                    cmdBuilder.Append(" INNER JOIN Area AR1 ON AR.ParentUID = AR1.UID");
+                    cmdBuilder.Append(" INNER JOIN Area AR2 ON AR1.ParentUID = AR2.UID");
+                    cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MG ON OU.mpt_GroupUID = MG.UID");
+                    cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MT ON OU.mpt_TypeUID = MT.UID");
+                    #endregion
+
+                    #region WHERE
+                    whereBuilder.AppendFormat(" WHERE DIO.AgentUID = {0}", agentUID);
+                    cmdBuilder.Append(whereBuilder);
+                    #endregion
+
+                    #region ORDER BY
+                    cmdBuilder.Append(" ORDER BY DIO.SequenceNumber");
+                    #endregion
+                }
+
+                else
+                {
+                    #region SELECT
+                    cmdBuilder.Append("SELECT OU.UID, OU.ID, OU.Name, OU.StreetAddress, OU.SequenceNumber");
+                    cmdBuilder.Append(", MG.MiscData AS Group_");
+                    cmdBuilder.Append(", MT.MiscData AS Type");
+                    cmdBuilder.Append(", AST.Description AS SubTown");
+                    cmdBuilder.Append(", AR.Description AS Town");
+                    cmdBuilder.Append(", AR1.Description AS District");
+                    cmdBuilder.Append(" FROM Outlet OU");
+                    #endregion
+
+                    #region JOIN
+                    cmdBuilder.Append(" LEFT OUTER JOIN Area AST ON OU.AreaUID1 = AST.UID");
+                    cmdBuilder.Append(" INNER JOIN Area AR ON OU.AreaUID = AR.UID");
+                    cmdBuilder.Append(" INNER JOIN Area AR1 ON AR.ParentUID = AR1.UID");
+                    cmdBuilder.Append(" INNER JOIN Area AR2 ON AR1.ParentUID = AR2.UID");
+                    cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MG ON OU.mpt_GroupUID = MG.UID");
+                    cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MT ON OU.mpt_TypeUID = MT.UID");
+                    #endregion
+
+                    #region ORDER BY
+                    cmdBuilder.Append(" ORDER BY OU.SequenceNumber");
+                    #endregion
+                }
+
+                connection.Open();
+
+                OleDbCommand comand = new OleDbCommand(cmdBuilder.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(comand);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                return dataSet;
+            }
+        }
+
+        /// <summary>
+        /// get retailer - distributor info
+        /// </summary>
+        /// <param name="distributorUID">distributor uid</param>
+        /// <param name="credintial"></param>
+        /// <returns></returns>
+        public static DataSet GetDistributorOutlet_OU(int distributorUID, UserCredential credintial)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder cmdBuilder = new StringBuilder();
+                StringBuilder whereBuilder = new StringBuilder();
+
+                #region SELECT
+
+                cmdBuilder.Append("SELECT DOU.OutletUID, DOU.VisitFrequency, DOU.DistributorUID");
+                cmdBuilder.Append(", OU.UID, OU.ID, OU.Name, OU.CreditPeriod, OU.CreditLimit, OU.CurrentCredit, OU.MaxOutstandingInvoiceCount AS MaxInvoice, OU.IsCash, OU.StreetAddress, OU.Telephone1, OU.Telephone2, OU.Email, OU.Fax, OU.City, OU.AreaUID1 AS SubTownUID, OU.MiscData AS DeliveryRouteCode, OU.ExpiryDate");
+                cmdBuilder.Append(", MG.UID AS GroupUID, MG.MiscData AS Group_");
+                cmdBuilder.Append(", MT.UID AS TypeUID, MT.MiscData AS Type");
+                cmdBuilder.Append(", AST.Description AS SubTown");
+                cmdBuilder.Append(", AR.UID AS TownUID, AR.Description AS Town");
+                cmdBuilder.Append(", AR1.UID AS DistrictUID, AR1.Description AS District");
+                cmdBuilder.Append(", BA.UID AS BusinessAreaUID, ba.Description AS BusinessArea");
+                cmdBuilder.Append(" FROM Outlet OU");
+
+                #endregion
+
+                #region JOIN
+
+                cmdBuilder.Append(" INNER JOIN DistributorOutlet DOU ON OU.UID = DOU.OutletUID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AST ON OU.AreaUID1 = AST.UID");
+                cmdBuilder.Append(" INNER JOIN Area AR ON OU.AreaUID = AR.UID");
+                cmdBuilder.Append(" INNER JOIN Area AR1 ON AR.ParentUID = AR1.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area BA ON OU.BusinessAreaUID = BA.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MG ON OU.mpt_GroupUID = MG.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MT ON OU.mpt_TypeUID = MT.UID");
+
+                #endregion
+
+                #region WHERE
+
+                whereBuilder.AppendFormat(" WHERE DOU.DistributorUID = {0}", distributorUID);
+                cmdBuilder.Append(whereBuilder);
+
+                #endregion
+
+                #region ORDER BY
+
+                cmdBuilder.Append(" ORDER BY OU.Name");
+
+                #endregion
+
+                connection.Open();
+
+                OleDbCommand command = new OleDbCommand(cmdBuilder.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                #region Calculated columns
+
+                object objExpiryDate = null;
+                if (dataSet.Tables[0].Rows.Count > 0)
+                {
+                    objExpiryDate = dataSet.Tables[0].Rows[0].Field<object>("ExpiryDate");
+                }
+                DataColumn keyColumn = new DataColumn("Key");
+                keyColumn.Expression = "Convert(DistributorUID, 'System.String') + '|' + Convert(OutletUID, 'System.String')";
+                dataSet.Tables["t"].Columns.Add(keyColumn);
+
+                DataColumn IsActiveColumn = new DataColumn("IsActive");
+                IsActiveColumn.Expression = objExpiryDate != DBNull.Value ? "false" : "true";
+                dataSet.Tables["t"].Columns.Add(IsActiveColumn);
+
+                #endregion
+
+                return dataSet;
+            }
+        }
+
+        public DataSet GetSKUTypes_OU(int uid)
+        {
+            StringBuilder cmdBuilder = new StringBuilder();
+
+            cmdBuilder.Append("SELECT MS.UID, MS.MiscData AS SKUType");
+            cmdBuilder.Append(" FROM OutletSKUType OST");
+            cmdBuilder.Append(" INNER JOIN MultiPurposeTag MS ON OST.mpt_SKUTypeUID = MS.UID");
+            cmdBuilder.AppendFormat(" WHERE MS.Type = {0} AND OST.OutletUID = {1}", (byte)MultiPurposeTagBL.TypeEnum.OutletSKUType, uid);
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+            return dataSet;
+
+        }
+
+        public DataSet GetCompetitors_OU(int uid)
+        {
+            StringBuilder cmdBuilder = new StringBuilder();
+
+            cmdBuilder.Append("SELECT MS.UID, MS.MiscData AS Competitor");
+            cmdBuilder.Append(" FROM OutletSKUType OST");
+            cmdBuilder.Append(" INNER JOIN MultiPurposeTag MS ON OST.mpt_SKUTypeUID = MS.UID");
+            cmdBuilder.AppendFormat(" WHERE MS.Type = {0} AND OST.OutletUID = {1}", (byte)MultiPurposeTagBL.TypeEnum.Competitor, uid);
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+            return dataSet;
+
+        }
+
+        public static void SetSequence_OU(int? agentUID, Dictionary<int, int> list, UserCredential credential)
+        {
+            if (list.Count < 1)
+                return;
+
+            VantageEntities db = new VantageEntities();
+            List<int> uidList = new List<int>();
+            Dictionary<int, int> currSeq = new Dictionary<int, int>();
+            Dictionary<int, int> updSeq = new Dictionary<int, int>();
+            Dictionary<int, int> changeSeq = new Dictionary<int, int>();
+
+            // sort updated list
+            var sortedSeq = (from entry in list orderby entry.Value ascending select entry).ToList();
+            foreach (var row in sortedSeq)
+            {
+                updSeq.Add(row.Key, row.Value);
+            }
+
+            if (agentUID.HasValue)
+            {
+                // get current sort list
+                var vAIs = from ro in db.AgentOutlet
+                           join i in db.Outlet on ro.OutletUID equals i.UID
+                           where ro.AgentUID == agentUID
+                           orderby ro.SequenceNumber, i.Name
+                           select new
+                           {
+                               ro.OutletUID
+                           };
+                byte newSeq = 1;
+                foreach (var row in vAIs)
+                {
+                    currSeq.Add(row.OutletUID, newSeq++);
+                    uidList.Add(row.OutletUID);
+                }
+            }
+            else
+            {
+                // get current sort list
+                var vOutlets = from ro in db.Outlet
+                               orderby ro.SequenceNumber, ro.Name
+                               select new
+                               {
+                                   ro.UID
+                               };
+                byte newSeq = 1;
+                foreach (var row in vOutlets)
+                {
+                    currSeq.Add(row.UID, newSeq++);
+                    uidList.Add(row.UID);
+                }
+            }
+
+            // find the changes
+            foreach (int outletUID in updSeq.Keys)
+            {
+                if (currSeq[outletUID] != updSeq[outletUID])
+                {
+                    changeSeq.Add(outletUID, updSeq[outletUID]);
+                }
+            }
+
+            // re-adjust the outlet uid list
+            foreach (int uid in changeSeq.Keys)
+            {
+                int newSeqValue = changeSeq[uid];
+
+                if (newSeqValue >= 1 && newSeqValue <= uidList.Count)
+                {
+                    newSeqValue--;
+                    uidList.Remove(uid);
+                    uidList.Insert(newSeqValue, uid);
+                }
+            }
+
+            int updCount = 0;
+
+            if (agentUID.HasValue)
+            {
+                // update!
+                List<AgentOutlet> agentOutlets = (from ro in db.AgentOutlet where ro.AgentUID == agentUID select ro).ToList();
+
+                foreach (AgentOutlet agentOutlet in agentOutlets)
+                {
+                    int index = uidList.IndexOf(agentOutlet.OutletUID) + 1;
+                    if (agentOutlet.SequenceNumber == null || agentOutlet.SequenceNumber != index)
+                    {
+                        agentOutlet.SequenceNumber = index;
+
+                        if (updCount++ > 10)
+                        {
+                            updCount = 0;
+                            db.SaveChanges();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // update!
+                List<Outlet> outlets = (from ro in db.Outlet select ro).ToList();
+
+                foreach (Outlet outlet in outlets)
+                {
+                    int index = uidList.IndexOf(outlet.UID) + 1;
+                    if (outlet.SequenceNumber == null || outlet.SequenceNumber != index)
+                    {
+                        outlet.SequenceNumber = index;
+
+                        if (updCount++ > 10)
+                        {
+                            updCount = 0;
+                            db.SaveChanges();
+                        }
+                    }
+                }
+            }
+
+            db.SaveChanges();
+        }
+
+        //for Set Town 
+        public DataSet Get_OU()
+        {
+            StringBuilder cmdBuilder = new StringBuilder();
+
+            cmdBuilder.Append("SELECT OU.UID, OU.ID, OU.Name, OU.StreetAddress");
+            cmdBuilder.Append(", AR.Description AS Town");
+            cmdBuilder.Append(", AR1.Description AS District");
+
+            cmdBuilder.Append(" FROM Outlet OU");
+
+            cmdBuilder.Append(" INNER JOIN Area AR ON OU.AreaUID = AR.UID");
+            cmdBuilder.Append(" INNER JOIN Area AR1 ON AR.ParentUID = AR1.UID");
+
+            cmdBuilder.Append(" WHERE OU.ExpiryDate IS NULL");
+            cmdBuilder.Append(" ORDER BY OU.Name");
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+            return dataSet;
+        }
+
+        //for Set businessArea 
+        public DataSet Get2_OU()
+        {
+            StringBuilder cmdBuilder = new StringBuilder();
+
+            cmdBuilder.Append("SELECT OU.UID, OU.ID, OU.Name, OU.StreetAddress");
+            cmdBuilder.Append(", AR.Description AS BusinessArea");
+
+            cmdBuilder.Append(" FROM Outlet OU");
+
+            cmdBuilder.Append(" INNER JOIN Area AR ON OU.BusinessAreaUID = AR.UID");
+
+            cmdBuilder.Append(" WHERE OU.ExpiryDate IS NULL");
+            cmdBuilder.Append(" ORDER BY OU.Name");
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+            return dataSet;
+        }
+
+        // mapping page
+        public DataSet Get_OU(bool IsSimOnly,UserCredential credential)
+        {
+            CacheBL cacheBL = new CacheBL();
+            string rawKey = "OutletMappingCache";
+
+            StringBuilder cmdBuilder = new StringBuilder();
+            StringBuilder whereBuilder = new StringBuilder();
+
+            string uids = "";
+            if (credential.Designation < EmployeeBL.DesignationEnum.Freelancers)
+            {
+                uids = DistributorBL.GetUIDs_DI(credential);
+            }
+
+            rawKey = string.Concat(rawKey, "-", uids);
+
+            // See if the item is in the cache
+            DataSet dataSet = cacheBL.GetCacheItem(rawKey, (int)CacheBL.CacheKey.OutletMappingCache) as DataSet;
+
+            if (dataSet == null)
+            {
+                cmdBuilder.Append("SELECT OU.UID, OU.ID, OU.Name, OU.StreetAddress, OU.ExpiryDate");
+                cmdBuilder.Append(", OU.PCSIM, OU.PCReload, OU.PCVoucher");
+                cmdBuilder.Append(", MG.MiscData AS [Group], MT.MiscData AS [Type]");
+                cmdBuilder.Append(", AST.Description AS SubTown, AR.Description AS Town");
+                cmdBuilder.Append(", AR1.Description AS District, AR2.Description AS Province");
+                if (!credential.DistributorUID.HasValue)
+                    cmdBuilder.Append(" , DI.Name AS Distributor");
+                else
+                    cmdBuilder.Append(" , '-' AS Distributor");
+                cmdBuilder.Append(", E.FirstName, E.LastName");
+                cmdBuilder.Append(", r.ID AS RouteID, r.Description AS RouteName");
+
+                cmdBuilder.Append(" FROM Outlet OU");
+
+                cmdBuilder.Append(" LEFT OUTER JOIN DistributorOutlet DIO ON OU.UID = DIO.OutletUID AND DIO.ExpiryDate IS NULL");
+                if (!credential.DistributorUID.HasValue)
+                    cmdBuilder.Append(" LEFT OUTER JOIN Distributor DI ON DIO.DistributorUID = DI.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN (");
+                cmdBuilder.Append("     SELECT AG.DistributorUID, AO.OutletUID, AO.AgentUID");
+                cmdBuilder.Append("     FROM Agent AG INNER JOIN AgentOutlet AO ON AG.UID = AO.AgentUID");
+                cmdBuilder.Append("     WHERE AO.ExpiryDate IS NULL");
+                cmdBuilder.Append("     GROUP BY AG.DistributorUID, AO.AgentUID, AO.OutletUID) ADO");
+                if (credential.DistributorUID.HasValue)
+                    cmdBuilder.AppendFormat(" ON ADO.DistributorUID = {0} AND ADO.OutletUID = ou.UID", credential.DistributorUID);
+                else if (credential.Designation < EmployeeBL.DesignationEnum.Freelancers)
+                {
+                    cmdBuilder.Append(" ON DI.UID = ADO.DistributorUID AND OU.UID = ADO.OutletUID AND DI.UID IN (" + uids + ")");
+                }
+                else
+                    cmdBuilder.Append(" ON DI.UID = ADO.DistributorUID AND OU.UID = ADO.OutletUID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Agent A ON ADO.AgentUID = A.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Employee E ON A.EmployeeUID = E.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN (");
+                cmdBuilder.Append("     SELECT DR.DistributorUID, DR.RouteUID, RO.OutletUID");
+                cmdBuilder.Append("     FROM DistributorRoute DR INNER JOIN RouteOutlet RO ON DR.RouteUID = RO.RouteUID");
+                cmdBuilder.Append("     WHERE RO.ExpiryDate IS NULL");
+                cmdBuilder.Append("     GROUP BY DR.DistributorUID, DR.RouteUID, RO.OutletUID) DRO");
+                if (credential.DistributorUID.HasValue)
+                    cmdBuilder.AppendFormat(" ON DRO.DistributorUID = {0} AND DRO.OutletUID = ou.UID", credential.DistributorUID);
+                else if (credential.Designation < EmployeeBL.DesignationEnum.Freelancers)
+                {
+                    cmdBuilder.Append(" ON DI.UID = DRO.DistributorUID AND OU.UID = DRO.OutletUID AND DI.UID IN (" + uids + ")");
+                }
+                else
+                    cmdBuilder.Append(" ON DI.UID = DRO.DistributorUID AND OU.UID = DRO.OutletUID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Route R ON DRO.RouteUID = R.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AST ON OU.AreaUID1 = AST.UID");
+                cmdBuilder.Append(" INNER JOIN Area AR ON OU.AreaUID = AR.UID");
+                cmdBuilder.Append(" INNER JOIN Area AR1 ON AR.ParentUID = AR1.UID");
+                cmdBuilder.Append(" INNER JOIN Area AR2 ON AR1.ParentUID = AR2.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MG ON OU.mpt_GroupUID = MG.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MT ON OU.mpt_TypeUID = MT.UID");
+
+                if (credential.DistributorUID.HasValue)
+                    whereBuilder.Append(" DIO.DistributorUID = " + credential.DistributorUID.Value);
+                else if (credential.Designation < EmployeeBL.DesignationEnum.Freelancers)
+                {
+                    if (whereBuilder.Length > 0) whereBuilder.Append(" AND");
+                    whereBuilder.Append(" DIO.DistributorUID IN (" + uids + ")");
+                }
+
+                if (IsSimOnly)
+                {
+                    if (whereBuilder.Length > 0) whereBuilder.Append(" AND");
+                    whereBuilder.AppendFormat("  A.mpt_TypeEnum = 1 ");
+                    whereBuilder.AppendFormat(" AND OU.mpt_TypeEnum <> 2 ");  
+                }
+
+                if (whereBuilder.Length > 0)
+                {
+                    cmdBuilder.Append(" WHERE ");
+                    cmdBuilder.Append(whereBuilder.ToString());
+                }
+
+                cmdBuilder.Append(" ORDER BY OU.Name");
+
+                dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+                #region Calculated columns
+
+                DataColumn empNameColumn = new DataColumn("SalesRep");
+                empNameColumn.Expression = "FirstName + ' ' + LastName";
+                dataSet.Tables["t"].Columns.Add(empNameColumn);
+
+                #endregion
+
+                cacheBL.AddCacheItem(rawKey, dataSet, (int)CacheBL.CacheKey.OutletMappingCache);
+
+            }
+
+            return dataSet;
+        }
+
+        // view
+        public DataSet GetAgentOutlets_OU(UserCredential credential)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder cmdBuilder = new StringBuilder();
+                StringBuilder whereBuilder = new StringBuilder();
+
+                #region SELECT
+                cmdBuilder.Append("SELECT O.UID, O.ID, O.Name, O.ExpiryDate, O.CreditLimit, O.CreditPeriod, O.StreetAddress ");
+                cmdBuilder.Append(", AT.Description AS Town");
+                cmdBuilder.Append(", AD.Description AS District");
+                cmdBuilder.Append(", AB.Description AS BusinessArea");
+                cmdBuilder.Append(", A.MiscData AS Agent");
+                cmdBuilder.Append(", E.FirstName, E.LastName");
+                cmdBuilder.Append(" FROM Outlet O");
+                #endregion
+
+                #region JOIN
+                cmdBuilder.Append(" INNER JOIN AgentOutlet AO ON O.UID = AO.OutletUID");
+                cmdBuilder.Append(" INNER JOIN Agent A ON AO.AgentUID = A.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AB ON O.BusinessAreaUID = AB.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AT ON O.AreaUID = AT.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AD ON AT.ParentUID = AD.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Employee E ON A.EmployeeUID = E.UID ");
+                #endregion
+
+                #region WHERE
+
+                whereBuilder.Append(" WHERE O.ExpiryDate IS NULL AND AO.ExpiryDate IS NULL ");
+
+                if (credential.DistributorUID.HasValue)
+                {
+                    whereBuilder.Append(" AND A.DistributorUID = " + credential.DistributorUID.Value);
+                }
+                else if (credential.Designation < EmployeeBL.DesignationEnum.Freelancers)
+                {
+                    if (whereBuilder.Length > 0) whereBuilder.Append(" AND");
+                    string uids = DistributorBL.GetUIDs_DI(credential);
+                    whereBuilder.Append(" A.DistributorUID IN (" + uids + ")");
+                }
+
+                cmdBuilder.Append(whereBuilder);
+
+                #endregion
+
+                #region ORDER BY
+                cmdBuilder.Append(" ORDER BY O.Name");
+                #endregion
+
+                connection.Open();
+
+                OleDbCommand command = new OleDbCommand(cmdBuilder.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                #region Calculated columns
+
+                DataColumn empNameColumn = new DataColumn("Employee");
+                empNameColumn.Expression = "FirstName + ' ' + LastName";
+                dataSet.Tables["t"].Columns.Add(empNameColumn);
+
+                #endregion
+
+                return dataSet;
+            }
+        }
+
+        // outlet -> route assign page - view
+        public DataSet GetAssignToRoute_OU(int distributorUID, int? routeUID, UserCredential credential)
+        {
+            if (distributorUID < 1)
+                return null;
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder cmdBuilder = new StringBuilder();
+
+                cmdBuilder.Append("SELECT O.UID, O.ID, O.Name, O.StreetAddress, O.ExpiryDate  ");
+                cmdBuilder.Append(", MG.MiscData AS [Group]");
+                cmdBuilder.Append(", MT.MiscData AS Type");
+                cmdBuilder.Append(", AT.Description AS Town");
+                cmdBuilder.Append(", AD.Description AS District");
+                cmdBuilder.Append(", AB.Description AS BusinessArea");
+                if (routeUID.HasValue)
+                    cmdBuilder.Append(", ROX.OutletUID");
+
+                cmdBuilder.Append(" FROM Outlet O");
+
+                cmdBuilder.Append(" INNER JOIN DistributorOutlet DOX ON O.UID = DOX.OutletUID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AB ON O.BusinessAreaUID = AB.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN RouteOutlet ROX ON O.UID = ROX.OutletUID AND ROX.ExpiryDate IS NULL");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AT ON O.AreaUID = AT.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AD ON AT.ParentUID = AD.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultipurposeTag MG ON O.mpt_GroupUID = MG.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultipurposeTag MT ON O.mpt_TypeUID = MT.UID");
+
+                cmdBuilder.AppendFormat(" WHERE DOX.DistributorUID = {0}", distributorUID);
+                if (routeUID.HasValue) // edit
+                    cmdBuilder.AppendFormat(" AND (ROX.RouteUID = {0} OR ROX.OutletUID IS NULL)", routeUID.Value);
+                else // new
+                    cmdBuilder.AppendFormat(" AND ROX.OutletUID IS NULL");
+
+                cmdBuilder.Append(" ORDER BY O.Name");
+
+                DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+                #region Calculated columns
+
+                DataColumn statusColumn = new DataColumn("IsSelected");
+                if (routeUID.HasValue)
+                    statusColumn.Expression = "IIF(OutletUID IS NULL, 0, 1)";
+                else
+                    statusColumn.Expression = "0";
+
+                dataSet.Tables["t"].Columns.Add(statusColumn);
+
+                #endregion
+
+                return dataSet;
+            }
+        }
+
+        // outlet -> distributor assign page - view
+        public DataSet GetAssignToDistributor_OU(int distributorUID, UserCredential credential)
+        {
+            if (distributorUID < 1)
+                return null;
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder cmdBuilder = new StringBuilder();
+                StringBuilder whereBuilder = new StringBuilder();
+                //StringBuilder cmdBuilderPre = new StringBuilder();
+                //StringBuilder whereBuilderPre = new StringBuilder();
+
+                //#region SELECT -------------------------------------------------------------
+                //cmdBuilderPre.Append("SELECT DO.OutletUID");
+                //cmdBuilderPre.Append(" FROM DistributorOutlet DO");
+                //#endregion
+
+                //#region WHERE
+                //whereBuilderPre.AppendFormat("DO.DistributorUID != {0}", distributorUID);
+                //whereBuilderPre.Append(whereBuilder);
+                //#endregion
+
+                #region SELECT
+                cmdBuilder.Append("SELECT O.UID, O.ID, O.Name, O.ExpiryDate, O.CreditLimit, O.CreditPeriod, O.StreetAddress ");
+                cmdBuilder.Append(", AT.Description AS Town");
+                cmdBuilder.Append(", AD.Description AS District");
+                cmdBuilder.Append(", AB.Description AS BusinessArea");
+                cmdBuilder.Append(", DOX.OutletUID");
+                cmdBuilder.Append(" FROM Outlet O");
+                #endregion
+
+                #region JOIN
+                cmdBuilder.AppendFormat(" LEFT OUTER JOIN DistributorOutlet DOX ON O.UID = DOX.OutletUID AND DOX.DistributorUID = {0} AND DOX.ExpiryDate IS NULL", distributorUID);
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AB ON O.BusinessAreaUID = AB.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AT ON O.AreaUID = AT.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AD ON AT.ParentUID = AD.UID");
+                #endregion
+
+                #region WHERE
+
+                whereBuilder.Append(" WHERE O.ExpiryDate IS NULL AND (O.mpt_TypeEnum IS NULL OR O.mpt_TypeEnum != 1) ");
+                cmdBuilder.Append(whereBuilder);
+
+                #endregion
+
+                #region ORDER BY
+                cmdBuilder.Append(" ORDER BY O.Name");
+                #endregion
+
+                connection.Open();
+
+                OleDbCommand command = new OleDbCommand(cmdBuilder.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                #region Calculated columns
+
+                DataColumn statusColumn = new DataColumn("IsSelected");
+                statusColumn.Expression = "IIF(OutletUID IS NULL, 0, 1)";
+                dataSet.Tables["t"].Columns.Add(statusColumn);
+
+                #endregion
+
+                return dataSet;
+            }
+        }
+
+        public DataSet GetAssignToAgent_OU(int distributorUID, int agentUID, UserCredential credential)
+        {
+            if (agentUID < 1)
+                return null;
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder cmdBuilder = new StringBuilder();
+                StringBuilder whereBuilder = new StringBuilder();
+
+                #region SELECT
+                cmdBuilder.Append("SELECT O.UID, O.ID, O.Name, O.ExpiryDate, O.CreditLimit, O.CreditPeriod, O.StreetAddress ");
+                cmdBuilder.Append(", AT.Description AS Town");
+                cmdBuilder.Append(", AD.Description AS District");
+                cmdBuilder.Append(", AB.Description AS BusinessArea");
+                cmdBuilder.Append(", DOX.OutletUID");
+                cmdBuilder.Append(" FROM Outlet O");
+                #endregion
+
+                #region JOIN
+                cmdBuilder.AppendFormat(" LEFT OUTER JOIN AgentOutlet DOX ON O.UID = DOX.OutletUID AND DOX.AgentUID = {0} AND DOX.ExpiryDate IS NULL", agentUID);
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AB ON O.BusinessAreaUID = AB.UID");
+
+
+
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AT ON O.AreaUID = AT.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AD ON AT.ParentUID = AD.UID");
+                #endregion
+
+                #region WHERE
+
+                whereBuilder.Append(" WHERE O.ExpiryDate IS NULL AND (O.mpt_TypeEnum IS NULL OR O.mpt_TypeEnum != 1)");
+                whereBuilder.AppendFormat(" AND O.UID IN (SELECT DO.OutletUID FROM DistributorOutlet DO WHERE DO.DistributorUID = {0} AND DO.ExpiryDate IS NULL)", distributorUID);
+
+                cmdBuilder.Append(whereBuilder);
+
+                #endregion
+
+                #region ORDER BY
+                cmdBuilder.Append(" ORDER BY O.Name");
+                #endregion
+
+                connection.Open();
+
+                OleDbCommand command = new OleDbCommand(cmdBuilder.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                #region Calculated columns
+
+                DataColumn statusColumn = new DataColumn("IsSelected");
+                statusColumn.Expression = "IIF(OutletUID IS NULL, 0, 1)";
+                dataSet.Tables["t"].Columns.Add(statusColumn);
+
+                #endregion
+
+                return dataSet;
+            }
+        }
+
+        public DataSet GetByKeyList_OU(List<object> outletUIDs, UserCredential credential)
+        {
+            if (outletUIDs.Count < 1)
+                return null;
+
+            StringBuilder outletUIDlist = new StringBuilder();
+            bool comma = false;
+            foreach (int uid in outletUIDs)
+            {
+                if (comma)
+                    outletUIDlist.Append(",");
+                outletUIDlist.Append(uid);
+                comma = true;
+            }
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder cmdBuilder = new StringBuilder();
+                StringBuilder whereBuilder = new StringBuilder();
+
+                #region SELECT
+                cmdBuilder.Append("SELECT O.UID, O.ID, O.Name, O.ExpiryDate, O.CreditLimit, O.CreditPeriod, O.StreetAddress ");
+                cmdBuilder.Append(", MG.MiscData AS [Group]");
+                cmdBuilder.Append(", MT.MiscData AS Type");
+                cmdBuilder.Append(", AT.Description AS Town");
+                cmdBuilder.Append(", AD.Description AS District");
+                cmdBuilder.Append(", AB.Description AS BusinessArea");
+                cmdBuilder.Append(" FROM Outlet O");
+                #endregion
+
+                #region JOIN
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AB ON O.BusinessAreaUID = AB.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AT ON O.AreaUID = AT.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN Area AD ON AT.ParentUID = AD.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultipurposeTag MG ON O.mpt_GroupUID = MG.UID");
+                cmdBuilder.Append(" LEFT OUTER JOIN MultipurposeTag MT ON O.mpt_TypeUID = MT.UID");
+                #endregion
+
+                #region WHERE
+
+                whereBuilder.AppendFormat(" WHERE O.UID IN ({0})", outletUIDlist);
+
+                cmdBuilder.Append(whereBuilder);
+
+                #endregion
+
+                #region ORDER BY
+                cmdBuilder.Append(" ORDER BY O.Name");
+                #endregion
+
+                connection.Open();
+
+                OleDbCommand command = new OleDbCommand(cmdBuilder.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                return dataSet;
+            }
+        }
+
+        public DataSet GetByGeographicalArea_OU(int areaUID, UserCredential credential)
+        {
+            if (areaUID < 1)
+                return null;
+
+            AreaBL.TypeEnum areaType = AreaBL.TypeEnum.Null;
+
+            object obj = new DbHelper().GetScalarByUID(DbHelper.T_Area, DbHelper.C_mpt_TypeEnum, areaUID);
+            if (obj != DBNull.Value)
+                areaType = (AreaBL.TypeEnum)(short)obj;
+
+            StringBuilder commandString = new StringBuilder(
+                "SELECT O.UID, O.ID, O.Name, O.StreetAddress, O.ExpiryDate " +
+                "FROM Outlet O ");
+
+            if (areaType == AreaBL.TypeEnum.Province)
+            {
+                commandString.Append("INNER JOIN Area AT ON O.AreaUID = AT.UID ");
+                commandString.Append("INNER JOIN Area AD ON AT.ParentUID = AD.UID ");
+            }
+            else if (areaType == AreaBL.TypeEnum.District)
+            {
+                commandString.Append("INNER JOIN Area AT ON O.AreaUID = AT.UID ");
+            }
+
+            if (areaType == AreaBL.TypeEnum.Town)
+                commandString.Append(String.Format("WHERE O.AreaUID = {0}", areaUID));
+            else if (areaType == AreaBL.TypeEnum.SubTown)
+                commandString.Append(String.Format("WHERE O.AreaUID1 = {0}", areaUID));
+            else if (AreaBL.TypeEnum.District == areaType)
+                commandString.Append(String.Format("WHERE AT.ParentUID = {0}", areaUID));
+            else if (AreaBL.TypeEnum.Province == areaType)
+                commandString.Append(String.Format("WHERE AD.ParentUID = {0}", areaUID));
+
+            DataSet dataSet = new DbHelper().GetDataSet(commandString.ToString());
+
+            return dataSet;
+        }
+
+        public DataSet GetByBusinessArea_OU(int areaUID, UserCredential credential)
+        {
+            if (areaUID < 1)
+                return null;
+
+            AreaBL.TypeEnum areaType = AreaBL.TypeEnum.Null;
+
+            object obj = new DbHelper().GetScalarByUID(DbHelper.T_Area, DbHelper.C_mpt_TypeEnum, areaUID);
+            if (obj != DBNull.Value)
+                areaType = (AreaBL.TypeEnum)(short)obj;
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder commandString = new StringBuilder(
+                    "SELECT O.UID, O.ID, O.Name, O.ExpiryDate " +
+                    "FROM Outlet O ");
+
+                // Join
+                if (areaType != AreaBL.LeafBusinessAreaLevel && areaType != AreaBL.TypeEnum.BusinessArea3)
+                {
+                    if (areaType <= AreaBL.TypeEnum.BusinessArea2)
+                        commandString.Append("INNER JOIN Area A2 ON O.BusinessAreaUID = A2.UID ");
+                    if (areaType <= AreaBL.TypeEnum.BusinessArea1)
+                        commandString.Append("INNER JOIN Area A1 ON A2.ParentUID = A1.UID ");
+                }
+
+                // Where
+                if (areaType == AreaBL.LeafBusinessAreaLevel || areaType == AreaBL.TypeEnum.BusinessArea3)
+                    commandString.Append(String.Format("WHERE O.BusinessAreaUID = {0}", areaUID));
+                else if (AreaBL.TypeEnum.BusinessArea1 == areaType)
+                    commandString.Append(String.Format("WHERE A1.UID = {0}", areaUID));
+                else if (AreaBL.TypeEnum.BusinessArea2 == areaType)
+                    commandString.Append(String.Format("WHERE A2.UID = {0}", areaUID));
+
+                OleDbCommand command = new OleDbCommand(commandString.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                return dataSet;
+            }
+        }
+
+        public DataSet GetByRoute_OU(int routeUID, UserCredential credential)
+        {
+            if (routeUID < 1)
+                return null;
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder commandString = new StringBuilder(
+                    "SELECT O.UID, O.ID, O.Name, O.StreetAddress, O.ExpiryDate " +
+                    ", RO.OutletSequence " +
+                    "FROM Outlet O ");
+
+                // Join
+                commandString.Append("INNER JOIN RouteOutlet RO ON O.UID = RO.OutletUID ");
+
+                // Where
+                commandString.Append(String.Format("WHERE RO.ExpiryDate IS NULL AND RO.RouteUID = {0}", routeUID));
+
+                OleDbCommand command = new OleDbCommand(commandString.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                return dataSet;
+            }
+        }
+
+        public DataSet GetByBusinessArea_OU(int businessAreaUID, bool isAssign, UserCredential credential)
+        {
+            StringBuilder cmdBuilder = new StringBuilder();
+            StringBuilder whereBuilder = new StringBuilder();
+
+            cmdBuilder.Append("SELECT OU.UID, OU.ID, OU.Name, OU.IsCash, OU.StreetAddress, OU.ExpiryDate");
+            cmdBuilder.Append(", MG.MiscData AS [Group], MT.MiscData AS [Type]");
+            cmdBuilder.Append(", AST.Description AS SubTown, AR.Description AS Town");
+            cmdBuilder.Append(", AR1.Description AS District, BA.Description AS BusinessArea , CASE WHEN OU.ExpiryDate IS NULL THEN 1 ELSE 0 END AS IsActive ");
+
+            cmdBuilder.Append(" FROM Outlet OU");
+
+            cmdBuilder.Append(" INNER JOIN DistributorOutlet DO ON OU.UID = DO.OutletUID");
+
+            if (credential.DistributorUID.HasValue)
+            {
+                cmdBuilder.Append(" AND");
+                cmdBuilder.Append(" DO.DistributorUID = " + credential.DistributorUID.Value);
+            }
+            else if (credential.Designation < EmployeeBL.DesignationEnum.Freelancers)
+            {
+                cmdBuilder.Append(" AND");
+                string uids = DistributorBL.GetUIDs_DI(credential);
+                cmdBuilder.Append(" DO.DistributorUID IN (" + uids + ")");
+            }
+
+            cmdBuilder.Append(" LEFT OUTER JOIN Area AST ON OU.AreaUID1 = AST.UID");
+            cmdBuilder.Append(" INNER JOIN Area AR ON OU.AreaUID = AR.UID");
+            cmdBuilder.Append(" INNER JOIN Area AR1 ON AR.ParentUID = AR1.UID");
+            cmdBuilder.Append(" LEFT OUTER JOIN Area BA ON OU.BusinessAreaUID = BA.UID");
+            cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MG ON OU.mpt_GroupUID = MG.UID");
+            cmdBuilder.Append(" LEFT OUTER JOIN MultiPurposeTag MT ON OU.mpt_TypeUID = MT.UID");
+
+            if (isAssign)
+                whereBuilder.AppendFormat(" OU.BusinessAreaUID IS NULL OR OU.BusinessAreaUID != {0}", businessAreaUID);
+            else
+                whereBuilder.AppendFormat(" OU.BusinessAreaUID = {0}", businessAreaUID);
+
+            cmdBuilder.Append(" WHERE");
+            cmdBuilder.Append(whereBuilder.ToString());
+
+            cmdBuilder.Append(" ORDER BY OU.Name");
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdBuilder.ToString());
+
+            return dataSet;
+        }
+
+        public static List<OutletPerformanceSetting> GetPerformanceCategory_OU()
+        {
+            VantageEntities context = new VantageEntities();
+
+            List<OutletPerformanceSetting> list = (from ops in context.OutletPerformanceSetting
+                                                   select ops).ToList();
+
+            return list;
+        }
+
+        public static void SavePerformanceCategory(
+            List<OutletPerformanceSetting> list,
+            UserCredential credential)
+        {
+            using (VantageEntities context = new VantageEntities())
+            {
+                foreach (OutletPerformanceSetting item in list)
+                {
+                    OutletPerformanceSetting ops = context.OutletPerformanceSetting.First(p => p.mpt_ItemTypeEnum == item.mpt_ItemTypeEnum);
+
+                    if (ops.Category1Value != item.Category1Value
+                        || ops.Category2Value != item.Category2Value)
+                    {
+                        ops.Category1Value = item.Category1Value;
+                        ops.Category2Value = item.Category2Value;
+                        ops.LastModifiedBy = credential.Username;
+                        ops.LastModifiedDate = DateTime.Now;
+                    }
+                }
+
+                context.SaveChanges();
+            }
+        }
+
+        public void SaveGeoPoint_OU(int uid, decimal longitude, decimal latitude, UserCredential credential)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                OleDbCommand command = new OleDbCommand();
+                OleDbTransaction transaction = null;
+
+                command.Connection = connection;
+
+                try
+                {
+                    connection.Open();
+                    transaction = connection.BeginTransaction();
+
+                    command.Connection = connection;
+                    command.Transaction = transaction;
+
+                    command.CommandText = string.Format(
+                                "UPDATE Outlet " +
+                                "SET Longitude = ?, Latitude = ?, LastModifiedDate = {0}, LastModifiedBy = ? " +
+                                "WHERE UID = ?", DbHelper.F_DATE);
+
+                    command.Parameters.AddWithValue("@Longitude", longitude);
+                    command.Parameters.AddWithValue("@Latitude", latitude);
+                    command.Parameters.AddWithValue("@LastModifiedBy", credential.Username);
+                    command.Parameters.AddWithValue("@UID", uid);
+
+                    // Execute the commands.
+                    command.ExecuteNonQuery();
+                    transaction.Commit();
+                }
+                catch// (Exception ex)
+                {
+                    //Console.WriteLine(ex.Message);
+                    try
+                    {
+                        transaction.Rollback();
+                    }
+                    catch
+                    {
+                        // Do nothing here; transaction is not active.
+                    }
+                }
+            }
+        }
+
+        public void ToggleActivation_OU(List<object> uids, UserCredential credential)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                OleDbCommand command = new OleDbCommand();
+                OleDbTransaction transaction = null;
+
+                command.Connection = connection;
+
+                try
+                {
+                    connection.Open();
+                    transaction = connection.BeginTransaction();
+
+                    command.Connection = connection;
+                    command.Transaction = transaction;
+
+                    foreach (int uid in uids)
+                    {
+                        command.CommandText = string.Format(
+                                "UPDATE Outlet " +
+                                "SET ExpiryDate = CASE WHEN ExpiryDate IS NULL THEN {0} ELSE NULL END," +
+                                "mpt_StatusEnum = CASE WHEN ExpiryDate IS NULL THEN 2 ELSE NULL END " +
+                                "WHERE UID = {1}", DbHelper.F_DATE, uid);
+                        command.ExecuteNonQuery();
+                    }
+                    transaction.Commit();
+                }
+                catch// (Exception ex)
+                {
+                    //Console.WriteLine(ex.Message);
+                    try
+                    {
+                        // Attempt to roll back the transaction.
+                        transaction.Rollback();
+                    }
+                    catch
+                    {
+                        // Do nothing here; transaction is not active.
+                    }
+                }
+            }
+            new CacheBL().InvalidateCache((int)CacheBL.CacheKey.OutletCache);
+        }
+
+        public void ToggleCommisionActivation_OU(List<object> uids, UserCredential credential)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                OleDbCommand command = new OleDbCommand();
+                OleDbTransaction transaction = null;
+
+                command.Connection = connection;
+
+                try
+                {
+                    connection.Open();
+                    transaction = connection.BeginTransaction();
+
+                    command.Connection = connection;
+                    command.Transaction = transaction;
+
+                    foreach (int uid in uids)
+                    {
+                        command.CommandText = string.Format(
+                               "UPDATE Outlet " +
+                               "SET mpt_StatusEnum = CASE WHEN mpt_StatusEnum IS NULL OR mpt_StatusEnum = 1 THEN {0} ELSE NULL END " +
+                               "WHERE UID = {1}", 2, uid);
+
+                        command.ExecuteNonQuery();
+                    }
+                    transaction.Commit();
+                }
+                catch// (Exception ex)
+                {
+                    //Console.WriteLine(ex.Message);
+                    try
+                    {
+                        // Attempt to roll back the transaction.
+                        transaction.Rollback();
+                    }
+                    catch
+                    {
+                        // Do nothing here; transaction is not active.
+                    }
+                }
+            }
+            new CacheBL().InvalidateCache((int)CacheBL.CacheKey.OutletCache);
+        }
+
+        public void ToggleActivation_OU(int uid, UserCredential credential)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                OleDbCommand command = new OleDbCommand();
+                OleDbTransaction transaction = null;
+
+                // Set the Connection to the new OleDbConnection.
+                command.Connection = connection;
+
+                try
+                {
+                    connection.Open();
+
+                    transaction = connection.BeginTransaction();
+
+                    command.Connection = connection;
+                    command.Transaction = transaction;
+
+                    command.CommandText = string.Format(
+                                "UPDATE Outlet " +
+                                "SET ExpiryDate = CASE WHEN ExpiryDate IS NULL THEN {0} ELSE NULL END, " +
+                                "mpt_StatusEnum = CASE WHEN ExpiryDate IS NULL THEN 2 ELSE NULL END " +
+                                "WHERE UID = {1}", DbHelper.F_DATE, uid);
+
+                    command.ExecuteNonQuery();
+                    transaction.Commit();
+                }
+                catch// (Exception ex)
+                {
+                    //Console.WriteLine(ex.Message);
+                    try
+                    {
+                        // Attempt to roll back the transaction.
+                        transaction.Rollback();
+                    }
+                    catch
+                    {
+                        // Do nothing here; transaction is not active.
+                    }
+                }
+            }
+            new CacheBL().InvalidateCache((int)CacheBL.CacheKey.OutletCache);
+        }
+
+        public void ToggleCommisionActivation_OU(int uid, UserCredential credential)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                OleDbCommand command = new OleDbCommand();
+                OleDbTransaction transaction = null;
+
+                // Set the Connection to the new OleDbConnection.
+                command.Connection = connection;
+
+                try
+                {
+                    connection.Open();
+
+                    transaction = connection.BeginTransaction();
+
+                    command.Connection = connection;
+                    command.Transaction = transaction;
+
+                    command.CommandText = string.Format(
+                                "UPDATE Outlet " +
+                                "SET mpt_StatusEnum = CASE WHEN mpt_StatusEnum IS NULL OR mpt_StatusEnum = 1 THEN {0} ELSE NULL END " +
+                                "WHERE UID = {1}", 2, uid);
+
+                    command.ExecuteNonQuery();
+                    transaction.Commit();
+                }
+                catch// (Exception ex)
+                {
+                    //Console.WriteLine(ex.Message);
+                    try
+                    {
+                        // Attempt to roll back the transaction.
+                        transaction.Rollback();
+                    }
+                    catch
+                    {
+                        // Do nothing here; transaction is not active.
+                    }
+                }
+            }
+            new CacheBL().InvalidateCache((int)CacheBL.CacheKey.OutletCache);
+        }
+
+        public static void Save_OU_Duplicate_Outlet_Loc(decimal Latitude, decimal Longitude, string id)
+        {
+            using (VantageEntities db = new VantageEntities())
+            {
+                Outlet Outlet = null;
+                if (!String.IsNullOrEmpty(id))
+                {
+                    Outlet = db.Outlet.First(p => p.ID == id);
+                }
+                Outlet.Latitude = Latitude;
+                Outlet.Longitude = Longitude;
+                db.SaveChanges();
+            }
+        }
+
+        public static DataSet Get_Duplicated_Location_Retailers()
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+
+                string cmdText = string.Format(
+                       "SELECT UID,ID,ID2,Name,OwnerName,mpt_TypeEnum,StreetAddress,City,AreaUID,Latitude,Longitude,TLRNumber,Telephone1 " +
+                           " FROM Outlet" +
+                           " WHERE Latitude IN (" +
+                           "  SELECT Latitude" +
+                           "  FROM Outlet " +
+                           "  GROUP BY Longitude,Latitude" +
+                           "    HAVING COUNT(UID) > 1 ) " +
+                           " ORDER BY Latitude "
+                     );
+
+                connection.Open();
+                OleDbCommand command = new OleDbCommand(cmdText, connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+                return dataSet;
+            }
+        }
+
+        public int Save_OU(
+            int? uid,
+            string prospectKey,
+            String id,
+            String name,
+            decimal creditLimit,
+            short creditPeriod,
+            int maxInvoiceCount,
+            String streetAddress,
+            String telephone1,
+            String email,
+            String fax,
+            int? businessAreaUID,
+            int? outletCategoryUID,
+            int townUID,
+            int? subTownUID,
+            bool isCashOutlet,
+            int priceListUID2,
+            int? outletType,
+            int? outletGroup,
+            int? outletClass,
+            String VatNumber,
+            String OwnerName,
+            String QRCode,
+            String city,
+            int distributorUID,
+            int? routeUID,
+            byte? mpt_statusenum,
+            UserCredential credential)
+        {
+            using (VantageEntities db = new VantageEntities())
+            {
+                Outlet outlet = null;
+
+                if (uid.HasValue)
+                {
+                    outlet = db.Outlet.First(p => p.UID == uid.Value);
+                }
+                else
+                {
+                    outlet = db.Outlet.SingleOrDefault(p => p.ID == id);
+
+                    if (outlet != null)
+                        throw new Exception("Retailer ID already exists!");
+
+                    outlet = new Outlet();
+                    outlet.ID = id;
+                    outlet.LastModifiedBy = credential.Username;
+                    outlet.CreationDate = DateTime.Now;
+                }
+
+                outlet.Name = name;
+                outlet.ID2 = QRCode;
+                outlet.CreditLimit = creditLimit;
+                outlet.CreditPeriod = creditPeriod;
+                outlet.MaxOutstandingInvoiceCount = (byte)maxInvoiceCount;
+                outlet.StreetAddress = streetAddress.ToUpper();
+                outlet.Telephone1 = telephone1.ToUpper();
+                outlet.Email = email;
+                outlet.Fax = fax;
+                outlet.mpt_TypeUID = outletType;
+                outlet.mpt_GroupUID = outletGroup;
+                outlet.mpt_ClassUID = outletClass;
+
+                #region manage categories
+
+                int? parentCategoryUID = outletCategoryUID;
+                List<int?> categoryUIDs = new List<int?>();
+                categoryUIDs.Add(outletCategoryUID); // add leaf level to 0 index
+
+                while (parentCategoryUID != null)
+                {
+                    parentCategoryUID = db.OutletCategory.First(p => p.UID == parentCategoryUID).ParentUID;
+                    if (parentCategoryUID.HasValue)
+                        categoryUIDs.Add(parentCategoryUID.Value);
+                }
+
+                categoryUIDs.Reverse();
+
+                if (categoryUIDs.Count >= 1) outlet.OutletCategoryUID = categoryUIDs[0]; else outlet.OutletCategoryUID = null;
+                if (categoryUIDs.Count >= 2) outlet.OutletCategory2UID = categoryUIDs[1]; else outlet.OutletCategory2UID = null;
+                if (categoryUIDs.Count >= 3) outlet.OutletCategory3UID = categoryUIDs[2]; else outlet.OutletCategory3UID = null;
+                if (categoryUIDs.Count >= 4) outlet.OutletCategory4UID = categoryUIDs[3]; else outlet.OutletCategory4UID = null;
+                if (categoryUIDs.Count >= 5) outlet.OutletCategory5UID = categoryUIDs[4]; else outlet.OutletCategory5UID = null;
+
+                #endregion
+
+                outlet.BusinessAreaUID = businessAreaUID;
+                outlet.AreaUID = townUID;
+                outlet.AreaUID1 = subTownUID;
+                outlet.IsCash = isCashOutlet;
+                outlet.SalePriceListUID = priceListUID2;
+                outlet.LastModifiedDate = DateTime.Now;
+                outlet.LastModifiedBy = credential.Username;
+                outlet.VATNumber = VatNumber;
+                outlet.OwnerName = OwnerName;
+                outlet.City = city;
+                outlet.mpt_StatusEnum = mpt_statusenum;
+
+                if (!uid.HasValue)
+                    db.Outlet.AddObject(outlet);
+                db.SaveChanges();
+
+                if (!uid.HasValue)
+                {
+                    uid = outlet.UID;
+
+                    DistributorOutlet diOutlet = new DistributorOutlet();
+                    diOutlet.DistributorUID = distributorUID;
+                    diOutlet.OutletUID = Convert.ToInt32(uid);
+                    diOutlet.CreationDate = DateTime.Now;
+                    diOutlet.LastModifiedDate = DateTime.Now;
+                    diOutlet.LastModifiedBy = credential.Username;
+                    db.DistributorOutlet.AddObject(diOutlet);
+
+                    db.SaveChanges();
+                }
+
+                #region RouteOutlet
+                RouteOutlet ro = db.RouteOutlet.FirstOrDefault(p => p.OutletUID == uid.Value && p.RouteUID != (routeUID ?? 0));
+
+                if (ro != null) // expire previous routeoutlet/agentoutlet
+                {
+                    if (ro.ExpiryDate == null)
+                    {
+                        ro.ExpiryDate = DateTime.Now;
+                        ro.LastModifiedBy = credential.Username;
+                    }
+
+                    var agentRoutes = (from ar in db.AgentRoute
+                                       where ar.RouteUID == ro.RouteUID
+                                         && ar.ExpiryDate == null
+                                       select new
+                                       {
+                                           ar.AgentUID
+                                       }).Distinct();
+
+                    foreach (var agentRoute in agentRoutes)
+                    {
+                        string cmd = String.Format(
+                            "UPDATE AgentOutlet SET ExpiryDate = GETDATE(), LastModifiedBy = '{0}' WHERE AgentUID = {1} AND OutletUID = {2} AND ExpiryDate IS NULL",
+                            credential.Username, agentRoute.AgentUID, uid);
+
+                        db.ExecuteStoreCommand(cmd); // expire
+                    }
+
+                    db.SaveChanges();
+                }
+
+                if (routeUID.HasValue)
+                {
+                    ro = db.RouteOutlet.FirstOrDefault(p => p.OutletUID == uid.Value && p.RouteUID == routeUID);
+
+                    if (ro == null)
+                    {
+                        ro = new RouteOutlet();
+                        ro.RouteUID = routeUID.Value;
+                        ro.OutletUID = uid.Value;
+                        ro.OutletSequence = 0;
+                        ro.CreationDate = DateTime.Now;
+                        ro.LastModifiedBy = credential.Username;
+
+                        db.RouteOutlet.AddObject(ro);
+                    }
+                    else if (ro.ExpiryDate != null)
+                    {
+                        ro.ExpiryDate = null;
+                        ro.LastModifiedDate = DateTime.Now;
+                        ro.LastModifiedBy = credential.Username;
+                    }
+
+                    var agentRoutes = (from ar in db.AgentRoute
+                                       where ar.RouteUID == routeUID
+                                         && ar.ExpiryDate == null
+                                       select new
+                                       {
+                                           ar.AgentUID
+                                       }).Distinct();
+
+                    foreach (var agentRoute in agentRoutes)
+                    {
+                        AgentOutlet ao = db.AgentOutlet.FirstOrDefault(p => p.AgentUID == agentRoute.AgentUID && p.OutletUID == uid);
+                        if (ao == null) // new
+                        {
+                            ao = new AgentOutlet();
+                            ao.AgentUID = agentRoute.AgentUID;
+                            ao.OutletUID = uid.Value;
+                            ao.CreationDate = DateTime.Now;
+                            ao.LastModifiedBy = credential.Username;
+
+                            db.AgentOutlet.AddObject(ao);
+                        }
+                        else if (ao.ExpiryDate != null) // re-active
+                        {
+                            ao.ExpiryDate = null;
+                            ao.LastModifiedDate = DateTime.Now;
+                            ao.LastModifiedBy = credential.Username;
+                        }
+                    }
+
+                    db.SaveChanges();
+                }
+                #endregion
+
+                if (!String.IsNullOrEmpty(prospectKey))
+                {
+                    KeyValuePair<int, int> keys = Utils.GetKeys(prospectKey);
+
+                    Prospect prospect = db.Prospect.First(p => p.SiteUID == keys.Key && p.UID == keys.Value);
+                    prospect.EffectiveDate = DateTime.Now;
+                    prospect.LastModifiedBy = credential.Username;
+                    prospect.LastModifiedDate = DateTime.Now;
+
+                    AgentOutlet agentOutlet = db.AgentOutlet.FirstOrDefault(p => p.AgentUID == prospect.AgentUID && p.OutletUID == uid.Value);
+                    if (agentOutlet == null)
+                    {
+                        agentOutlet = new AgentOutlet();
+                        agentOutlet.AgentUID = prospect.AgentUID;
+                        agentOutlet.OutletUID = uid.Value;
+                        agentOutlet.CreationDate = DateTime.Now;
+                        agentOutlet.LastModifiedBy = credential.Username;
+
+                        db.AgentOutlet.AddObject(agentOutlet);
+                    }
+                    db.SaveChanges();
+                }
+            }
+
+            new CacheBL().InvalidateCache((int)CacheBL.CacheKey.OutletCache);
+
+            return uid.Value;
+        }
+
+        public static void SaveOutletBusinessArea(
+            List<object> uids,
+            bool isAssign,
+            int? businessAreaUID, // Only for ASSIGN
+            UserCredential credential)
+        {
+            using (VantageEntities db = new VantageEntities())
+            {
+                foreach (int uid in uids)
+                {
+                    Outlet ou = db.Outlet.First(p => p.UID == uid);
+                    if (isAssign)
+                        ou.BusinessAreaUID = businessAreaUID;
+                    else
+                        ou.BusinessAreaUID = null;
+                    ou.LastModifiedDate = DateTime.Now;
+                    ou.LastModifiedBy = credential.EmployeeID;
+                }
+
+                db.SaveChanges();
+            }
+        }
+
+        #region GMap
+        public OutletData GetMapData(int outletUID)
+        {
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                string commandString =
+                        "SELECT     dbo.Outlet.UID AS OutletUID, dbo.Outlet.ID, dbo.Outlet.Name, isnull(dbo.Outlet.Latitude,0) as Latitude, " +
+                        "isnull(dbo.Outlet.Longitude,0) as Longitude, dbo.Outlet.StreetAddress " +
+                        "FROM         dbo.Outlet " +
+                        "WHERE     (dbo.Outlet.UID = " + outletUID + ")";
+                connection.Open();
+
+                OleDbCommand command = new OleDbCommand(commandString, connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+                OutletData ot = new OutletData();
+
+                foreach (DataRow r in dataSet.Tables[0].Rows)
+                {
+                    ot.outletUID = Convert.ToInt32(r["OutletUID"].ToString());
+                    ot.ID = r["ID"].ToString();
+                    ot.name = r["Name"].ToString();
+                    ot.Address = r["StreetAddress"].ToString();
+                    GLatLng p = new GLatLng();
+                    p.lat = Convert.ToDouble(r["Latitude"].ToString());
+                    p.lng = Convert.ToDouble(r["Longitude"].ToString());
+                    ot.point = p;
+                }
+                return ot;
+            }
+        }
+
+        public string SaveLoc(int outletUID, GLatLng p)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+
+                OleDbCommand command = new OleDbCommand();
+                OleDbTransaction transaction = null;
+
+                command.Connection = connection;
+
+                try
+                {
+                    connection.Open();
+                    transaction = connection.BeginTransaction();
+
+                    command.Connection = connection;
+                    command.Transaction = transaction;
+
+                    command.CommandText = string.Format(
+                               "UPDATE    Outlet " +
+                                "SET              Latitude = " + p.lat + ", Longitude = " + p.lng +
+                                " WHERE     (UID = " + outletUID + ")");
+                    // Execute the commands.
+                    command.ExecuteNonQuery();
+
+                    transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    //Console.WriteLine(ex.Message);
+                    try
+                    {
+                        transaction.Rollback();
+                    }
+                    catch
+                    {
+                        // Do nothing here; transaction is not active.
+                    }
+                }
+            }
+            return string.Empty;
+        }
+
+        public static void SaveLocation_OU(int? outletUID, string lat, string lng)
+        {
+            using (TransactionScope ts = TransactionUtils.CreateTransactionScope())
+            {
+                using (VantageEntities db = new VantageEntities())
+                {
+
+                    decimal location_lat = decimal.Parse(lat);
+                    decimal location_lng = decimal.Parse(lng);
+
+                    Outlet outlet = db.Outlet.FirstOrDefault(p => (p.Latitude == location_lat) && (p.Longitude == location_lng));
+
+                    if (outlet != null)
+                        throw new Exception("Retailer already exists.!");
+                    else
+                    {
+                        outlet = db.Outlet.FirstOrDefault(p => (p.UID == outletUID));
+                        outlet.Latitude = location_lat;
+                        outlet.Longitude = location_lng;
+                        db.SaveChanges();
+                    }
+                }
+                ts.Complete();
+            }
+        }
+
+        public List<OutletData> GetOutlets_GIS(int? distributorUID)
+        {
+            if (distributorUID == null)
+                distributorUID = -1;
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                //string commandString =
+                //        "SELECT     Outlet.UID AS OutletUID, Outlet.ID, Outlet.Name, ISNULL(Outlet.Latitude, 0) AS Latitude, ISNULL(Outlet.Longitude, 0) AS Longitude, "+
+                //        "Outlet.StreetAddress, ISNULL(dbo.Outlet.TLRNumber,'') as TLRNumber, ISNULL(dbo.Outlet.Telephone1,'') as Telephone1, ISNULL(dbo.Outlet.Telephone2,'') as Telephone2 " +
+                //        "FROM         Outlet INNER JOIN "+
+                //        "DistributorOutlet ON Outlet.UID = DistributorOutlet.OutletUID "+
+                //        "WHERE     (DistributorOutlet.DistributorUID = " + distributorUID + ")";
+                string commandString =
+                        "SELECT  O.UID as OutletUID,O.ID,O.Name,O.StreetAddress,ISNULL(O.Latitude,0) as Latitude ,ISNULL(O.Longitude,0) as Longitude" +
+                        " FROM Outlet O" +
+                        " WHERE O.Longitude IS NOT NULL ";
+                connection.Open();
+
+                OleDbCommand command = new OleDbCommand(commandString, connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                List<OutletData> list = new List<OutletData>();
+                foreach (DataRow r in dataSet.Tables[0].Rows)
+                {
+                    OutletData ot = new OutletData();
+                    ot.outletUID = Convert.ToInt32(r["OutletUID"].ToString());
+                    ot.ID = r["ID"].ToString();
+                    ot.name = r["Name"].ToString();
+                    ot.Address = r["StreetAddress"].ToString();
+                    //ot.TLRNumber = r["TLRNumber"].ToString();
+
+                    //ot.Description = r["Description"].ToString();
+                    //ot.CapturedBy = r["CapturedBy"].ToString();
+                    GLatLng p = new GLatLng();
+                    //p.lat = Convert.ToDouble(r["Latitude"].ToString());
+                    //p.lng = Convert.ToDouble(r["Longitude"].ToString());
+                    p.lat = Convert.ToDouble(r["Latitude"]);
+                    p.lng = Convert.ToDouble(r["Longitude"]);
+                    ot.point = p;
+                    list.Add(ot);
+                }
+                return list;
+            }
+        }
+
+        public List<OutletData> GetOutletsByDistributor(int? distributorUID)
+        {
+            if (distributorUID == null)
+                distributorUID = -1;
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                //string commandString =
+                //        "SELECT     Outlet.UID AS OutletUID, Outlet.ID, Outlet.Name, ISNULL(Outlet.Latitude, 0) AS Latitude, ISNULL(Outlet.Longitude, 0) AS Longitude, "+
+                //        "Outlet.StreetAddress, ISNULL(dbo.Outlet.TLRNumber,'') as TLRNumber, ISNULL(dbo.Outlet.Telephone1,'') as Telephone1, ISNULL(dbo.Outlet.Telephone2,'') as Telephone2 " +
+                //        "FROM         Outlet INNER JOIN "+
+                //        "DistributorOutlet ON Outlet.UID = DistributorOutlet.OutletUID "+
+                //        "WHERE     (DistributorOutlet.DistributorUID = " + distributorUID + ")";
+                string commandString =
+                        "SELECT O.UID as OutletUID,O.ID,O.Name,O.StreetAddress,ISNULL(O.Latitude,0) as Latitude ,ISNULL(O.Longitude,0) as Longitude ,A.Description, O.TLRNumber ,(E.FirstName +' - '+ E.LastName ) as CapturedBy, E.ID as DSRNO " +
+                        " FROM Outlet O" +
+                        "    INNER JOIN Area A ON O.AreaUID = A.UID " +
+                         "   INNER JOIN DistributorOutlet DO ON O.UID = DO.OutletUID " +
+                         "   INNER JOIN Distributor D ON DO.DistributorUID = D.UID " +
+                         "   INNER JOIN AgentOutlet AO ON O.UID = AO.OutletUID " +
+                         "   INNER JOIN Agent AG ON AO.AgentUID = AG.UID " +
+                         "   INNER JOIN Employee E ON AG.EmployeeUID = E.UID " +
+                         "   WHERE (" + distributorUID + " = -1 OR D.UID = " + distributorUID + ") AND DO.ExpiryDate IS NULL AND AO.ExpiryDate IS NULL " +
+                         "   AND ISNULL(AG.mpt_TypeEnum,0) <> 1 AND ISNULL(D.mpt_TypeEnum,0) <> 1 AND AG.ExpiryDate IS NULL AND D.ExpiryDate IS NULL AND O.Latitude IS NOT NULL ";
+
+                connection.Open();
+
+                OleDbCommand command = new OleDbCommand(commandString, connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                List<OutletData> list = new List<OutletData>();
+                foreach (DataRow r in dataSet.Tables[0].Rows)
+                {
+                    OutletData ot = new OutletData();
+                    ot.outletUID = Convert.ToInt32(r["OutletUID"].ToString());
+                    ot.ID = r["ID"].ToString();
+                    ot.name = r["Name"].ToString();
+                    ot.Address = r["StreetAddress"].ToString();
+                    ot.TLRNumber = r["TLRNumber"].ToString();
+                    ot.Description = r["Description"].ToString();
+                    ot.CapturedBy = r["CapturedBy"].ToString();
+                    ot.curentbalance = Convert.ToInt32(r["Latitude"]);
+                    ot.DSRnumber = r["DSRNO"].ToString();
+                    GLatLng p = new GLatLng();
+                    //p.lat = Convert.ToDouble(r["Latitude"].ToString());
+                    //p.lng = Convert.ToDouble(r["Longitude"].ToString());
+                    p.lat = Convert.ToDouble(r["Latitude"]);
+                    p.lng = Convert.ToDouble(r["Longitude"]);
+                    ot.point = p;
+                    list.Add(ot);
+                }
+                return list;
+            }
+        }
+        #endregion
+
+        public static List<AgentVisitOutet> GetDistributorOutlet_GIS_sequence(int agentUID, DateTime deDate,UserCredential credential)
+        {
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+
+                StringBuilder commandString = new StringBuilder("SELECT  C.SiteUID " );
+                        commandString.Append(", C.UID " );
+                        commandString.Append(", C.ID " );
+                        commandString.Append(", C.Notes ");
+                        commandString.Append(", O.ID as OutletID " );
+                        commandString.Append(", O.Name as Name " );
+                        commandString.Append(", C.ScheduledStart " );
+                        commandString.Append(",ISNULL(C.IsAddHoc,2) as IsAddHoc " );
+                        commandString.Append(",ISNULL(C.Latitude,(O.Latitude + 0.0005)) as Latitude ");
+                        commandString.Append(",ISNULL(C.Longitude,(O.Longitude + 0.0005)) as Longitude ");
+                        commandString.Append(",ISNULL(O.Latitude,0) as OutletLatitude " );
+                        commandString.Append(",ISNULL(O.Longitude,0) as OutletLongitude " );
+                        commandString.Append(",SUM(ISNULL(MO.BalanceQty,0)) AS CurrentStock " );
+                        commandString.Append(",SUM(ISNULL(DAO.FinalValue,0)) AS ReOrderUnitQty ");
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 3 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS VoucherQty " );
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 1 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS SIMQty " );
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 2 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS ReloardQty " );
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 4 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS BundleItemQty " );
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 5 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS DeviceQty " );
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 3 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS VoucherReorder " );
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 1 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS SIMReorder ");
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 2 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS ReloarReOrder ");
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 4 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS BundleItemReOrder ");
+                        commandString.Append(",SUM(CASE WHEN MO.ItemUID = 5 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS DeviceReOrder ");
+                        commandString.Append("FROM mob_OutletItem MO " );
+                        commandString.Append("INNER JOIN Call C ON C.outletUID = MO.OutletUID " );
+                        commandString.Append("LEFT OUTER JOIN OutletROL DAO ON C.outletUID = DAO.OutletUID AND DAO.Month = CAST(Convert(VARCHAR(7),GETDATE(),120) + '-01' AS DATETIME) AND MO.ItemUID = DAO.ItemTypeEnum ");
+                        commandString.Append("INNER JOIN Outlet O ON MO.OutletUID = O.UID " );
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.AssistantSalesManager || credential.Designation == EmployeeBL.DesignationEnum.SalesManager
+                                                            || credential.Designation == EmployeeBL.DesignationEnum.SeniorSalesManager || credential.Designation == EmployeeBL.DesignationEnum.DistributorOwner
+                                                             || credential.Designation == EmployeeBL.DesignationEnum.FieldSalesCordinator || credential.Designation == EmployeeBL.DesignationEnum.DistributorOperator)
+                                {
+                                    commandString.Append("INNER JOIN DistributorOutlet DO ON O.UID= DO.OutletUID AND DO.ExpiryDate IS NULL ");
+                                    commandString.Append("INNER JOIN Distributor DS ON DO.DistributorUID = DS.UID ");
+                                    commandString.Append("INNER JOIN Employee DWN ON DS.emp_OwnerUID = DWN.UID AND DWN.mpt_DesignationEnum = 2 AND DWN.ExpiryDate IS NULL ");
+                                    commandString.Append("INNER JOIN Employee FSC ON DWN.ParentUID = FSC.UID AND FSC.mpt_DesignationEnum = 16 AND FSC.ExpiryDate IS NULL ");
+                                    commandString.Append("INNER JOIN Employee ASM ON FSC.ParentUID = ASM.UID AND ASM.mpt_DesignationEnum = 15 AND ASM.ExpiryDate IS NULL ");
+                                    commandString.Append("INNER JOIN Employee SM ON ASM.ParentUID = SM.UID AND SM.mpt_DesignationEnum = 6 AND SM.ExpiryDate IS NULL ");
+                                }
+
+                        commandString.AppendFormat("WHERE C.mpt_StatusEnum= {0} ",(byte)CallBL.StatusEnum.Completed );
+                        commandString.Append("AND MO.mpt_TypeEnum = 1 " );
+                        commandString.AppendFormat("AND CAST(CONVERT(VARCHAR(10),C.ScheduledStart,120) AS DATETIME) = {0} ",DbHelper.GetDateString(deDate.Date) );
+                        commandString.AppendFormat("AND C.AgentUID = {0} ", agentUID);
+                        commandString.AppendFormat("AND O.Latitude IS NOT NULL ");
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.DistributorOperator)
+                            commandString.AppendFormat("AND DS.UID = {0} ", credential.DistributorUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.AssistantSalesManager)
+                            commandString.AppendFormat("AND ASM.UID = {0} ", credential.EmployeeUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.SeniorSalesManager)
+                            commandString.AppendFormat("AND SM.ParentUID = {0} ", credential.EmployeeUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.SalesManager)
+                            commandString.AppendFormat("AND SM.UID = {0} ", credential.EmployeeUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.FieldSalesCordinator)
+                            commandString.AppendFormat("AND FSC.UID = {0} ", credential.EmployeeUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.DistributorOwner)
+                            commandString.AppendFormat("AND DWN.UID = {0} ", credential.EmployeeUID);
+
+                        commandString.Append("GROUP BY C.SiteUID " );
+                        commandString.Append(", C.UID " );
+                        commandString.Append(", C.ID " );
+                        commandString.Append(", C.Notes " );
+                        commandString.Append(", C.ScheduledStart " );
+                        commandString.Append(", C.Latitude " );
+                        commandString.Append(", C.Longitude " );
+                        commandString.Append(", O.Latitude " );
+                        commandString.Append(", O.Longitude " );
+                        commandString.Append(", O.ID " );
+                        commandString.Append(", C.IsAddHoc  " );
+                        commandString.Append(", O.Name  " );
+                        commandString.Append("ORDER BY C.ScheduledStart ");
+
+
+                connection.Open();
+                OleDbCommand command = new OleDbCommand(commandString.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+                //List<OutletData> adList = new List<OutletData>();
+                //List<AgentData> list = new List<AgentData>();
+
+                List<AgentVisitOutet> list = new List<AgentVisitOutet>();
+
+                foreach (DataRow r in dataSet.Tables[0].Rows)
+                {
+
+                    AgentVisitOutet agtout = new AgentVisitOutet();
+                    agtout.curentbalance = Convert.ToInt32(r["CurrentStock"]);
+                    agtout.reorderqty = Convert.ToInt32(r["ReOrderUnitQty"]);
+                    agtout.simCount = Convert.ToInt32(r["SIMQty"]);
+                    agtout.voucherqty = Convert.ToInt32(r["VoucherQty"]);
+                    agtout.reloadCount = Convert.ToInt32(r["ReloardQty"]);
+                    agtout.bundleItemCount = Convert.ToInt32(r["BundleItemQty"]);
+                    agtout.deviceCount = Convert.ToInt32(r["DeviceQty"]);
+                    agtout.voucherReorderQty = Convert.ToInt32(r["VoucherReorder"]);
+                    agtout.simReorderQty = Convert.ToInt32(r["SIMReorder"]);
+                    agtout.reloadReOrderQty = Convert.ToInt32(r["ReloarReOrder"]);
+                    agtout.bundleItemReOrderQty = Convert.ToInt32(r["BundleItemReOrder"]);
+                    agtout.DeviceReOrderQty = Convert.ToInt32(r["DeviceReOrder"]);
+
+                    agtout.ID = Convert.ToString((r["ID"]));
+                    agtout.orderDate = Convert.ToString((r["ScheduledStart"]));
+                    GLatLng p = new GLatLng();
+                    p.lat = Convert.ToDouble(r["Latitude"]);
+                    p.lng = Convert.ToDouble(r["Longitude"]);
+                    agtout.Location = p;
+                    agtout.Notes = r["Notes"].ToString();
+                    agtout.adHoc = Convert.ToByte(r["IsAddHoc"]);
+
+
+                    agtout.MOID = Convert.ToString((r["OutletID"]));
+                    agtout.name = Convert.ToString((r["Name"]));
+                    GLatLng pOutlet = new GLatLng();
+                    pOutlet.lat = Convert.ToDouble(r["OutletLatitude"]);
+                    pOutlet.lng = Convert.ToDouble(r["OutletLongitude"]);
+                    agtout.MOLocation = pOutlet;
+
+
+                    list.Add(agtout);
+                }
+                return list;
+            }
+        }
+
+        public static DataSet GetDistributorOutlet_GIS_sequence_Summary(int agentUID, DateTime deDate,UserCredential credential)
+        {
+
+            if (agentUID <= 0)
+                return null;
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder commandString = new StringBuilder(" SELECT COUNT(*) AS CallCount " );
+                        commandString.Append(",SUM(CASE WHEN C.mpt_StatusEnum = 6 THEN 1 ELSE 0 END) AS Productive " );
+                        commandString.Append(",SUM(CASE WHEN C.mpt_StatusEnum = 4 OR C.mpt_StatusEnum = 7 THEN 1 ELSE 0 END) AS UnProductive " );
+                        commandString.Append(",NotVisited = COUNT(*) - SUM(CASE WHEN C.mpt_StatusEnum = 6 THEN 1 ELSE 0 END) ");
+                        commandString.Append(" FROM Call C " );
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.AssistantSalesManager || credential.Designation == EmployeeBL.DesignationEnum.SalesManager
+                                                            || credential.Designation == EmployeeBL.DesignationEnum.SeniorSalesManager || credential.Designation == EmployeeBL.DesignationEnum.DistributorOwner
+                                                            || credential.Designation == EmployeeBL.DesignationEnum.FieldSalesCordinator || credential.Designation == EmployeeBL.DesignationEnum.DistributorOperator)
+                        {
+                            commandString.Append("INNER JOIN DistributorOutlet DO ON C.OutletUID= DO.OutletUID AND DO.ExpiryDate IS NULL ");
+                            commandString.Append("INNER JOIN Distributor DS ON DO.DistributorUID = DS.UID ");
+                            commandString.Append("INNER JOIN Employee DWN ON DS.emp_OwnerUID = DWN.UID AND DWN.mpt_DesignationEnum = 2 AND DWN.ExpiryDate IS NULL ");
+                            commandString.Append("INNER JOIN Employee FSC ON DWN.ParentUID = FSC.UID AND FSC.mpt_DesignationEnum = 16 AND FSC.ExpiryDate IS NULL ");
+                            commandString.Append("INNER JOIN Employee ASM ON FSC.ParentUID = ASM.UID AND ASM.mpt_DesignationEnum = 15 AND ASM.ExpiryDate IS NULL ");
+                            commandString.Append("INNER JOIN Employee SM ON ASM.ParentUID = SM.UID AND SM.mpt_DesignationEnum = 6 AND SM.ExpiryDate IS NULL ");
+                        }
+
+                        commandString.AppendFormat(" WHERE CAST(CONVERT(VARCHAR(10),C.ScheduledStart,120) AS DATETIME) = {0} ",DbHelper.GetDateString(deDate.Date) );
+
+                        commandString.Append(" AND C.mpt_TypeEnum = 1 ");
+                        if (credential.Designation == EmployeeBL.DesignationEnum.DistributorOperator)
+                            commandString.AppendFormat("AND DS.UID = {0} ", credential.DistributorUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.AssistantSalesManager)
+                            commandString.AppendFormat("AND ASM.UID = {0} ", credential.EmployeeUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.SeniorSalesManager)
+                            commandString.AppendFormat("AND SM.ParentUID = {0} ", credential.EmployeeUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.SalesManager)
+                            commandString.AppendFormat("AND SM.UID = {0} ", credential.EmployeeUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.FieldSalesCordinator)
+                            commandString.AppendFormat("AND FSC.UID = {0} ", credential.EmployeeUID);
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.DistributorOwner)
+                            commandString.AppendFormat("AND DWN.UID = {0} ", credential.EmployeeUID);
+
+                        commandString.AppendFormat(" AND C.AgentUID = {0} ", agentUID);                      
+
+                connection.Open();
+                OleDbCommand command = new OleDbCommand(commandString.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+                return dataSet;
+            }        
+        
+        }
+
+       
+
+        public static DataSet GetDistributorOutlet_GIS_sequence_Grid(int agentUID, DateTime deDate)
+        {
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+
+                string cmdText = string.Format(
+                    "SELECT TOP 100 C.SiteUID " +
+                        ", C.UID " +
+                        ", C.ID " +
+                        ", C.Notes " +
+                        ", O.ID as OutletID " +
+                        ", O.Name as Name " +
+                        ", C.ScheduledStart " +
+                        ",ISNULL(C.IsAddHoc,2) as IsAddHoc " +
+                        ",ISNULL(C.Latitude,0) as Latitude " +
+                        ",ISNULL(C.Longitude,0) as Longitude " +
+                        ",ISNULL(O.Latitude,0) as OutletLatitude " +
+                        ",ISNULL(O.Longitude,0) as OutletLongitude " +
+                        ",SUM(ISNULL(MO.BalanceQty,0)) AS CurrentStock " +
+                        ",SUM(ISNULL(DAO.FinalValue,0)) AS ReOrderUnitQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 3 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS VoucherQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 1 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS SIMQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 2 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS ReloardQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 4 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS BundleItemQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 5 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS DeviceQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 3 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS VoucherReorder " +
+                        ",SUM(CASE WHEN MO.ItemUID = 1 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS SIMReorder " +
+                        ",SUM(CASE WHEN MO.ItemUID = 2 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS ReloarReOrder " +
+                        ",SUM(CASE WHEN MO.ItemUID = 4 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS BundleItemReOrder " +
+                        ",SUM(CASE WHEN MO.ItemUID = 5 THEN ISNULL(DAO.FinalValue,0) ELSE 0 END) AS DeviceReOrder " +
+                    "FROM mob_OutletItem MO " +
+                        "INNER JOIN Call C ON C.outletUID = MO.OutletUID " +
+                        "LEFT OUTER JOIN OutletROL DAO ON C.outletUID = DAO.OutletUID AND DAO.ItemTypeEnum = Mo.ItemUID " +
+                        "INNER JOIN Outlet O ON MO.OutletUID = O.UID " +
+                    "WHERE C.mpt_StatusEnum= {2} " +
+                        "AND MO.mpt_TypeEnum = 1 " +
+                        "AND CAST(CONVERT(VARCHAR(10),C.ScheduledStart,120) AS DATETIME) = {0} " +
+                        "AND C.AgentUID = {1} " +
+                        "AND O.Longitude <> 0 AND O.Latitude <>0 " +
+                    "GROUP BY C.SiteUID " +
+                        ", C.UID " +
+                        ", C.ID " +
+                        ", C.Notes " +
+                        ", C.ScheduledStart " +
+                        ", C.Latitude " +
+                        ", C.Longitude " +
+                        ", O.Latitude " +
+                        ", O.Longitude " +
+                        ", O.ID " +
+                        ", C.IsAddHoc  " +
+                        ", O.Name  " +
+                    "ORDER BY C.ScheduledStart "
+                    , DbHelper.GetDateString(deDate.Date), agentUID, (byte)CallBL.StatusEnum.Completed);
+
+                connection.Open();
+                OleDbCommand command = new OleDbCommand(cmdText, connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+
+                return dataSet;
+
+            }
+        }
+
+        public static List<AgentVisitOutet> GetDistributorOutlet_GIS_InRoute(int? agentUID, DateTime deDate)
+        {
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+
+                string cmdText = string.Format(
+                    "SELECT C.SiteUID " +
+                        ", C.UID " +
+                        ", C.ID " +
+                        ", C.Notes " +
+                        ", O.ID as OutletID " +
+                        ", O.Name as Name " +
+                        ", C.ScheduledStart " +
+                        ",ISNULL(C.IsAddHoc,2) as IsAddHoc " +
+                        ",ISNULL(C.Latitude,0) as Latitude " +
+                        ",ISNULL(C.Longitude,0) as Longitude " +
+                        ",ISNULL(O.Latitude,0) as OutletLatitude " +
+                        ",ISNULL(O.Longitude,0) as OutletLongitude " +
+                        ",SUM(ISNULL(MO.BalanceQty,0)) AS CurrentStock " +
+                        ",SUM(ISNULL(DAO.ReOrderUnitQty,0)) AS ReOrderUnitQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 3 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS VoucherQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 1 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS SIMQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 2 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS ReloardQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 4 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS BundleItemQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 5 THEN ISNULL(MO.BalanceQty,0) ELSE 0 END) AS DeviceQty " +
+                        ",SUM(CASE WHEN MO.ItemUID = 3 THEN ISNULL(DAO.ReOrderUnitQty,0) ELSE 0 END) AS VoucherReorder " +
+                        ",SUM(CASE WHEN MO.ItemUID = 1 THEN ISNULL(DAO.ReOrderUnitQty,0) ELSE 0 END) AS SIMReorder " +
+                        ",SUM(CASE WHEN MO.ItemUID = 2 THEN ISNULL(DAO.ReOrderUnitQty,0) ELSE 0 END) AS ReloarReOrder " +
+                        ",SUM(CASE WHEN MO.ItemUID = 4 THEN ISNULL(DAO.ReOrderUnitQty,0) ELSE 0 END) AS BundleItemReOrder " +
+                        ",SUM(CASE WHEN MO.ItemUID = 5 THEN ISNULL(DAO.ReOrderUnitQty,0) ELSE 0 END) AS DeviceReOrder " +
+                    "FROM mob_OutletItem MO " +
+                        "INNER JOIN Call C ON C.outletUID = MO.OutletUID " +
+                        "LEFT OUTER JOIN DistributorAgentOutletROL DAO ON C.outletUID = DAO.OutletUID AND DAO.ItemTypeEnum = Mo.ItemUID " +
+                        "INNER JOIN Outlet O ON MO.OutletUID = O.UID " +
+                    "WHERE C.mpt_StatusEnum= {2} " +
+                        "AND MO.mpt_TypeEnum = 1 " +
+                        "AND CAST(CONVERT(VARCHAR(10),C.ScheduledStart,120) AS DATETIME) = {0} " +
+                        "AND C.AgentUID = {1} " +
+                    "GROUP BY C.SiteUID " +
+                        ", C.UID " +
+                        ", C.ID " +
+                        ", C.Notes " +
+                        ", C.ScheduledStart " +
+                        ", C.Latitude " +
+                        ", C.Longitude " +
+                        ", O.Latitude " +
+                        ", O.Longitude " +
+                        ", O.ID " +
+                        ", C.IsAddHoc  " +
+                        ", O.Name  " +
+                    "ORDER BY C.ScheduledStart "
+                    , DbHelper.GetDateString(deDate.Date), agentUID, (byte)CallBL.StatusEnum.Completed);
+
+                connection.Open();
+                OleDbCommand command = new OleDbCommand(cmdText, connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+                List<AgentVisitOutet> list = new List<AgentVisitOutet>();
+
+                foreach (DataRow r in dataSet.Tables[0].Rows)
+                {
+
+                    AgentVisitOutet agtout = new AgentVisitOutet();
+                    agtout.curentbalance = Convert.ToInt32(r["CurrentStock"]);
+                    agtout.reorderqty = Convert.ToInt32(r["ReOrderUnitQty"]);
+                    agtout.simCount = Convert.ToInt32(r["SIMQty"]);
+                    agtout.voucherqty = Convert.ToInt32(r["VoucherQty"]);
+                    agtout.reloadCount = Convert.ToInt32(r["ReloardQty"]);
+                    agtout.bundleItemCount = Convert.ToInt32(r["BundleItemQty"]);
+                    agtout.deviceCount = Convert.ToInt32(r["DeviceQty"]);
+                    agtout.voucherReorderQty = Convert.ToInt32(r["VoucherReorder"]);
+                    agtout.simReorderQty = Convert.ToInt32(r["SIMReorder"]);
+                    agtout.reloadReOrderQty = Convert.ToInt32(r["ReloarReOrder"]);
+                    agtout.bundleItemReOrderQty = Convert.ToInt32(r["BundleItemReOrder"]);
+                    agtout.DeviceReOrderQty = Convert.ToInt32(r["DeviceReOrder"]);
+
+                    agtout.ID = Convert.ToString((r["ID"]));
+                    agtout.orderDate = Convert.ToString((r["ScheduledStart"]));
+                    GLatLng p = new GLatLng();
+                    p.lat = Convert.ToDouble(r["Latitude"]);
+                    p.lng = Convert.ToDouble(r["Longitude"]);
+                    agtout.Location = p;
+                    agtout.Notes = r["Notes"].ToString();
+                    agtout.adHoc = Convert.ToByte(r["IsAddHoc"]);
+
+
+                    agtout.MOID = Convert.ToString((r["OutletID"]));
+                    agtout.name = Convert.ToString((r["Name"]));
+                    GLatLng pOutlet = new GLatLng();
+                    pOutlet.lat = Convert.ToDouble(r["OutletLatitude"]);
+                    pOutlet.lng = Convert.ToDouble(r["OutletLongitude"]);
+                    agtout.MOLocation = pOutlet;
+
+
+                    list.Add(agtout);
+                }
+                return list;
+            }
+        }
+
+        public static DataSet GetOutletSeq_GIS_Grid(int agentUID, DateTime deDate, UserCredential credential)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder commandString = new StringBuilder("SELECT O.UID ");
+                commandString.Append(", O.Name As OutletName");
+                commandString.Append(", ISNULL(O.Latitude,0) as Latitude");
+                commandString.Append(", ISNULL(O.Longitude,0) as Longitude ");
+                commandString.Append(", C.ActualStart ");
+                commandString.Append(", O.ID as OutletID ");
+                commandString.Append(", O.StreetAddress ");
+                commandString.Append(", O.TLRNumber ");
+                commandString.Append(" FROM Call C ");
+                commandString.Append(" INNER JOIN Outlet O ON C.OutletUID = O.UID ");
+
+                if (credential.Designation == EmployeeBL.DesignationEnum.AssistantSalesManager || credential.Designation == EmployeeBL.DesignationEnum.SalesManager
+                                            || credential.Designation == EmployeeBL.DesignationEnum.SeniorSalesManager || credential.Designation == EmployeeBL.DesignationEnum.DistributorOwner)
+                    commandString.AppendFormat("INNER JOIN F_EmployeeOutletForRpt ({0}) FSC ON O.UID = FSC.OutletUID ", credential.EmployeeUID);
+
+                if (credential.Designation == EmployeeBL.DesignationEnum.DistributorOperator)
+                    commandString.AppendFormat(" INNER JOIN DistributorOutlet DO ON O.UID = DO.OutletUID AND DO.DistributorUID = {0} ", credential.DistributorUID);
+
+                commandString.AppendFormat(" WHERE C.AgentUID = {0} AND O.Latitude IS NOT NULL", agentUID);
+                commandString.AppendFormat(" AND CAST(CONVERT(VARCHAR(10),C.ActualStart,120) AS DATETIME) = {0}", DbHelper.GetDateString(deDate.Date));
+                commandString.AppendFormat(" AND C.mpt_StatusEnum= {0} ", (byte)CallBL.StatusEnum.Completed);
+                commandString.Append(" ORDER BY C.ActualStart ");
+
+                connection.Open();
+                OleDbCommand command = new OleDbCommand(commandString.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+                return dataSet;
+            }
+        }
+        public static List<AgentVisitOutet> GetOutletSeq_GIS(int agentUID, DateTime deDate,UserCredential credential)
+        {
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                StringBuilder commandString = new StringBuilder("SELECT O.UID " );
+                        commandString.Append(", O.Name As OutletName" );
+                        commandString.Append(", ISNULL(O.Latitude,0) as Latitude" );
+                        commandString.Append(", ISNULL(O.Longitude,0) as Longitude " );
+                        commandString.Append(", C.ActualStart " );
+                        commandString.Append(", O.ID as OutletID " );
+                        commandString.Append(", O.StreetAddress " );
+                        commandString.Append(", O.TLRNumber " );
+                        commandString.Append(", C.ID as CallID ");
+                        commandString.Append(" FROM Call C " );
+                        commandString.Append(" INNER JOIN Outlet O ON C.OutletUID = O.UID " );
+
+                        if (credential.Designation == EmployeeBL.DesignationEnum.AssistantSalesManager || credential.Designation == EmployeeBL.DesignationEnum.SalesManager
+                                                    || credential.Designation == EmployeeBL.DesignationEnum.SeniorSalesManager || credential.Designation == EmployeeBL.DesignationEnum.DistributorOwner || credential.Designation == EmployeeBL.DesignationEnum.FieldSalesCordinator)
+                            commandString.AppendFormat("INNER JOIN F_EmployeeOutletForRpt ({0}) FSC ON O.UID = FSC.OutletUID ", credential.EmployeeUID);
+
+                        if(credential.Designation == EmployeeBL.DesignationEnum.DistributorOperator)
+                            commandString.AppendFormat(" INNER JOIN DistributorOutlet DO ON O.UID = DO.OutletUID AND DO.DistributorUID = {0} ",credential.DistributorUID);
+
+                        commandString.AppendFormat(" WHERE C.AgentUID = {0} AND O.Latitude IS NOT NULL", agentUID);
+                        commandString.AppendFormat(" AND CAST(CONVERT(VARCHAR(10),C.ActualStart,120) AS DATETIME) = {0}", DbHelper.GetDateString(deDate.Date));
+                        commandString.AppendFormat(" AND C.mpt_StatusEnum= {0} ", (byte)CallBL.StatusEnum.Completed);
+                        commandString.Append(" ORDER BY C.ActualStart ");
+                //    , DbHelper.GetDateString(deDate.Date), agentUID, (byte)CallBL.StatusEnum.Completed);
+
+                connection.Open();
+                OleDbCommand command = new OleDbCommand(commandString.ToString(), connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+                List<AgentVisitOutet> list = new List<AgentVisitOutet>();
+
+                foreach (DataRow r in dataSet.Tables[0].Rows)
+                {
+                    AgentVisitOutet agtout = new AgentVisitOutet();
+                    GLatLng p = new GLatLng();
+                    p.lat = Convert.ToDouble(r["Latitude"]);
+                    p.lng = Convert.ToDouble(r["Longitude"]);
+                    agtout.Location = p;
+                    agtout.ID = Convert.ToString((r["OutletID"]));
+                    agtout.orderID = Convert.ToString((r["CallID"]));
+                    agtout.orderDate = Convert.ToString((r["ActualStart"]));
+                    agtout.name = Convert.ToString((r["OutletName"]));
+                    agtout.Address = Convert.ToString((r["StreetAddress"]));
+
+
+                    list.Add(agtout);
+                }
+                return list;
+
+            }
+        }
+        public static DataSet GetOutletLocationBaseSeq_GIS(int agentUID, DateTime deDate, string Latitude, string Longitude)
+        {
+
+            double lat = Convert.ToDouble(Latitude);
+            double lot = Convert.ToDouble(Longitude);
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                string cmdText = string.Format(
+                    "SELECT O.UID " +
+                        ", O.Name " +
+                        ", ISNULL(O.Latitude,0) as Latitude" +
+                        ", ISNULL(O.Longitude,0) as Longitude " +
+                        ", C.ActualStart " +
+                        ", O.ID as OutletID " +
+                        " FROM Call C " +
+                        " INNER JOIN Outlet O ON C.OutletUID = O.UID " +
+                        " WHERE C.AgentUID = {1} AND O.Latitude IS NOT NULL" +
+                        " AND CAST(CONVERT(VARCHAR(10),C.ActualStart,120) AS DATETIME) = {0}" +
+                        " AND O.Latitude = ROUND({3},10) AND O.Longitude = ROUND({4},10) " +
+                        " AND C.mpt_StatusEnum= {2} " +
+                        " ORDER BY C.ActualStart "
+                    , DbHelper.GetDateString(deDate.Date), agentUID, (byte)CallBL.StatusEnum.Completed, lat, lot);
+
+                connection.Open();
+                OleDbCommand command = new OleDbCommand(cmdText, connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                connection.Close();
+                return dataSet;
+            }
+        }
+
+
+
+        public static List<ChartSalesPeform> GetSalesPerformence_GIS(int? areaUID, DateTime fDate, DateTime todate, int categoryUID, int areaLevel)
+        {
+
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                int? townuid = -1;
+                int? subtownuid = -1;
+                int? districtuid = -1;
+                int? provinceuid = -1;
+
+                if (areaLevel == 0 && areaUID == 0)
+                    return null;
+                if (areaLevel == 1 && areaUID == 1)
+                    return null;
+
+                if (areaLevel == (int)AreaBL.TypeEnum.Town)
+                    townuid = areaUID;
+
+                if (areaLevel == (int)AreaBL.TypeEnum.SubTown)
+                    subtownuid = areaUID;
+
+                if (areaLevel == (int)AreaBL.TypeEnum.District)
+                    districtuid = areaUID;
+
+                if (areaLevel == (int)AreaBL.TypeEnum.Province)
+                    provinceuid = areaUID;
+
+
+                string dateFirst = fDate.ToString("yyyy-MM-dd");
+                string dateSecond = todate.ToString("yyyy-MM-dd");
+
+                string cmdText = string.Format(
+                    "SELECT O.Name AS OutletName,O.ID AS OutletID " +
+                    ",ISNULL(TT.UnitQty,0) AS OutletTarget " +
+                    ",ISNULL(AA.UnitQty,0) AS OutletArchivement " +
+                    "FROM Outlet O " +
+                    "LEFT OUTER JOIN " +
+                                "( " +
+
+                                    "SELECT I.OutletUID,SUM(IL.UnitQty) AS UnitQty " +
+                                    "FROM TxnInvoice I " +
+                                        "INNER JOIN TxnInvoiceLine IL ON I.UID = IL.TxnInvoiceUID  AND I.SiteUID = IL.TxnInvoice_SiteUID " +
+                                        "INNER JOIN Item T ON IL.ItemUID = T.UID " +
+                                    "WHERE IL.mpt_TypeEnum = 19	" +
+                                    "AND T.mpt_TypeEnum= {0} " +
+                                    "AND I.Date >= '{1}' AND I.Date <= '{2}' " +
+                                    "GROUP BY I.OutletUID " +
+                                ")AA ON O.UID = AA.OutletUID " +
+                    "LEFT OUTER JOIN " +
+                                "( " +
+
+                                    "SELECT I.OutletUID,SUM(I.Value) AS UnitQty " +
+                                    "FROM OutletTarget I " +
+                                    "WHERE TypeEnum = 5	" +
+                                    "AND I.ItemTypeEnum = {0} " +
+                                    "AND I.Month >= '{1}' AND I.Month <= '{2}' " +
+                                    "GROUP BY I.OutletUID " +
+                                ")TT ON O.UID = TT.OutletUID " +
+                    "LEFT OUTER JOIN Area T ON O.AreaUID = T.UID AND T.mpt_TypeEnum = 4 " +
+                    "LEFT OUTER JOIN Area ST ON T.UID = ST.ParentUID AND ST.mpt_TypeEnum = 5 " +
+                    "LEFT OUTER JOIN Area D ON T.ParentUID = D.UID AND D.mpt_TypeEnum = 3 " +
+                    "LEFT OUTER JOIN Area P ON D.ParentUID = P.UID AND P.mpt_TypeEnum = 2 " +
+                    "WHERE {3} = -1 OR O.AreaUID = {3} " +
+                       "AND ({4} = -1 OR ST.UID = {4}) " +
+                       "AND ({5} = -1 OR D.UID = {5}) " +
+                       "AND ({6} = -1 OR P.UID = {6}) ", categoryUID, dateFirst, dateSecond, townuid, subtownuid, districtuid, provinceuid);
+
+                connection.Open();
+                OleDbCommand command = new OleDbCommand(cmdText, connection);
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                DataSet dataSet = new DataSet();
+                dataAdapter.Fill(dataSet, "t");
+
+                List<ChartSalesPeform> list = new List<ChartSalesPeform>();
+
+                foreach (DataRow r in dataSet.Tables[0].Rows)
+                {
+                    ChartSalesPeform chtdata = new ChartSalesPeform();
+                    chtdata.description = Convert.ToString((r["OutletID"]));
+                    chtdata.target = Convert.ToDouble((r["OutletTarget"]));
+                    chtdata.archivment = Convert.ToDouble((r["OutletArchivement"]));
+                    //chtdata.month = Convert.ToDateTime((r["Month"]));
+
+                    list.Add(chtdata);
+                }
+                return list;
+            }
+        }
+
+        public static void SaveGeoArea_OU(int townUID, List<object> selectedUIDs, UserCredential credential)
+        {
+            using (VantageEntities db = new VantageEntities())
+            {
+                var townInfo = (from t in db.Areas
+                               where t.UID == townUID
+                               select new
+                               {
+                                   t.Description
+                               }).First();
+
+                string town = townInfo.Description;
+
+                foreach (int uid in selectedUIDs)
+                {
+                    db.ExecuteStoreCommand(
+                        "UPDATE Outlet SET AreaUID = {0}, City = {1}, LastModifiedBy = {2}, LastModifiedDate = GETDATE() WHERE UID = {3}"
+                        , townUID, town, credential.Username, uid);
+                }
+
+                db.SaveChanges();
+            }
+        }
+
+        public static void SaveBusinessArea_OU(int areaUID, List<object> selectedUIDs, UserCredential credential)
+        {
+            using (VantageEntities db = new VantageEntities())
+            {
+                foreach (int uid in selectedUIDs)
+                {
+                    db.ExecuteStoreCommand(
+                        "UPDATE Outlet SET BusinessAreaUID = {0}, LastModifiedBy = {1}, LastModifiedDate = GETDATE() WHERE UID = {2}"
+                        , areaUID, credential.Username, uid);
+                }
+
+                db.SaveChanges();
+            }
+        }
+
+        #region Upload Distributor - Agent - Outlet -----------------------------------------------
+        public static DataSet GetUploadedData_OU()
+        {
+            string cmdText = "SELECT RetailerDN, Type FROM I_UTIBA_AGENT ORDER BY Type DESC";
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdText);
+
+            return dataSet;
+        }
+
+        public static string UploadData_OU(String filePath)
+        {
+            string returnText = String.Empty;
+            StringBuilder sbError = new StringBuilder();
+
+            if (Path.GetExtension(filePath).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+            {
+                using (VantageEntities db = new VantageEntities())
+                {
+                    db.ExecuteStoreCommand("TRUNCATE TABLE I_UTIBA_AGENT");
+
+                    TextReader tr = new StreamReader(filePath);
+                    String line;
+
+                    while ((line = tr.ReadLine()) != null)
+                    {
+                        try
+                        {
+                            if (!String.IsNullOrEmpty(line))
+                            {
+                                I_UTIBA_AGENT iua = new I_UTIBA_AGENT();
+                                iua.RetailerDN = Convert.ToInt32(line);
+
+                                db.I_UTIBA_AGENT.AddObject(iua);
+                            }
+                        }
+                        catch (Exception exp)
+                        {
+                            sbError.AppendLine(String.Format("<ERROR = {0}, LINE = {1}>", exp.Message, line));
+                            continue;
+                        }
+                    }
+
+                    db.SaveChanges();
+                }
+            }
+            else
+            {
+                sbError.AppendLine("Invalid file format.");
+            }
+
+            returnText = sbError.ToString();
+            return returnText;
+        }
+
+        public static void SaveData_OU(int distributorUID, int agentUID, UserCredential credential)
+        {
+            //if (!TxnBL.IsClientTxnEnable2_TX(agentUID))
+            //    throw new Exception("All Entries blocked. Please call Sales Rep!");
+
+            VantageEntities db = new VantageEntities();
+
+            string cmdText = "UPDATE IUA " +
+                                     "SET [Type] = 'E' " +
+                                     "FROM I_UTIBA_AGENT IUA " +
+                                     "LEFT OUTER JOIN Outlet O ON O.TLRNumber = IUA.RetailerDN " +
+                                     "WHERE O.UID IS NULL";
+
+            db.ExecuteStoreCommand(cmdText);
+
+            cmdText = "UPDATE IUA " +
+                      "SET [Type] = 'A' " +
+                      "FROM I_UTIBA_AGENT IUA " +
+                      "INNER JOIN Outlet O ON O.TLRNumber = IUA.RetailerDN " +
+                      "LEFT OUTER JOIN AgentOutlet AO ON AO.AgentUID = " + agentUID + " AND AO.OutletUID = O.UID " +
+                      "AND AO.ExpiryDate IS NULL " +
+                      "WHERE AO.AgentUID IS NULL";
+
+            db.ExecuteStoreCommand(cmdText);
+
+            cmdText = "INSERT INTO I_UTIBA_AGENT(RetailerDN, [Type]) " +
+                      "SELECT OU.TLRNumber, 'R' " +
+                      "FROM AgentOutlet AO " +
+                      "INNER JOIN Outlet OU ON OU.UID = AO.OutletUID " +
+                      "LEFT OUTER JOIN ( " +
+                            "SELECT O.UID AS OutletUID " +
+                            "FROM I_UTIBA_AGENT IUA " +
+                            "INNER JOIN Outlet O ON O.TLRNumber = IUA.RetailerDN " +
+                            ") X ON AO.OutletUID = X.OutletUID " +
+                      "WHERE AO.AgentUID = " + agentUID + " AND X.OutletUID IS NULL " +
+                      "AND AO.ExpiryDate IS NULL " +
+                      "AND OU.TLRNumber > 0";
+
+            db.ExecuteStoreCommand(cmdText);
+
+            cmdText = "SELECT 1 FROM I_UTIBA_AGENT WHERE [Type] = 'E' ";
+            Object errorLine = new DbHelper().GetScalar(cmdText);
+
+            bool isErrorLineExists = errorLine != null && errorLine != DBNull.Value;
+
+            if (isErrorLineExists)
+                throw new Exception("Some retailers were not found in the system.");
+
+            string userName = "$axa - " + credential.Username;
+
+            using (TransactionScope ts = new TransactionScope())
+            {
+                //expire
+                cmdText = "UPDATE A " +
+                          "SET ExpiryDate = GETDATE(), LastModifiedBy = '" + userName + "', " +
+                          "LastModifiedDate = GETDATE() " +
+                          "FROM AgentOutlet A " +
+                          "INNER JOIN Outlet C ON C.UID = A.OutletUID " +
+                          "LEFT OUTER JOIN I_UTIBA_AGENT B ON C.TLRNumber = B.RetailerDN " +
+                          "WHERE A.AgentUID = " + agentUID + " " +
+                              "AND B.RetailerDN IS NULL " +
+                              "AND A.ExpiryDate IS NULL " +
+                              "AND C.TLRNumber IS NOT NULL AND C.TLRNumber > 0 ";
+
+                db.ExecuteStoreCommand(cmdText);
+
+                //insert
+                cmdText = "INSERT INTO AgentOutlet(AgentUID, OutletUID, CreationDate, LastModifiedBy) " +
+                          "SELECT " + agentUID + ", O.UID, GETDATE(), '" + userName + "' " +
+                          "FROM ( " +
+                                  "SELECT DISTINCT O.UID " +
+                                  "FROM I_UTIBA_AGENT I " +
+                                  "INNER JOIN Outlet O ON O.TLRNumber = I.RetailerDN " +
+                               ") O " +
+                                "LEFT OUTER JOIN AgentOutlet AO ON O.UID = AO.OutletUID AND " + agentUID + " = AO.AgentUID " +
+                                "WHERE AO.AgentUID IS NULL ";
+
+                db.ExecuteStoreCommand(cmdText);
+
+                //reactivate
+                cmdText = "UPDATE A " +
+                          "SET ExpiryDate = NULL, LastModifiedDate = GETDATE(), LastModifiedBy = '" + userName + "' " +
+                          "FROM AgentOutlet A " +
+                          "INNER JOIN Outlet C ON C.UID = A.OutletUID " +
+                          "INNER JOIN I_UTIBA_AGENT B ON C.TLRNumber = B.RetailerDN " +
+                          "WHERE A.AgentUID = " + agentUID + " " +
+                              "AND A.ExpiryDate IS NOT NULL ";
+                             
+                db.ExecuteStoreCommand(cmdText);
+
+                //insert
+                cmdText = "INSERT INTO DistributorOutlet(DistributorUID, OutletUID, CreationDate, LastModifiedBy) " +
+                          "SELECT " + distributorUID + ", X.OutletUID, GETDATE(), '" + userName + "' " +
+                          "FROM ( " +
+                              "SELECT DISTINCT AO.OutletUID " +
+                              "FROM Distributor D " +
+                               "INNER JOIN Agent A ON A.DistributorUID = D.UID " +
+                               "INNER JOIN AgentOutlet AO ON A.UID = AO.AgentUID " +
+                               "WHERE D.UID = " + distributorUID + " " +
+                                    "AND A.mpt_DesignationEnum = 1 " +
+                               ") X " +
+                                "LEFT OUTER JOIN DistributorOutlet Y ON Y.DistributorUID = " + distributorUID + " AND X.OutletUID = Y.OutletUID " +
+                                "WHERE " +
+                                "Y.DistributorUID IS NULL ";
+
+                db.ExecuteStoreCommand(cmdText);
+
+                //expire
+                cmdText = "UPDATE DistributorOutlet " +
+                          "SET ExpiryDate = GETDATE(), LastModifiedBy = '" + userName + "', " +
+                          "LastModifiedDate = GETDATE() " +
+                          "FROM DistributorOutlet DO " +
+                          "LEFT OUTER JOIN ( " +
+                          "SELECT DISTINCT AO.OutletUID " +
+                                "FROM Distributor D " +
+                                "INNER JOIN Agent A ON A.DistributorUID = D.UID " +
+                                "INNER JOIN AgentOutlet AO ON A.UID = AO.AgentUID " +
+                                "WHERE D.UID = " + distributorUID + " " +
+                                "AND A.mpt_DesignationEnum = 1 " +
+                                ") X ON X.OutletUID = DO.OutletUID " +
+                            "WHERE " +
+                            "DO.DistributorUID = " + distributorUID + " " +
+                            "AND DO.ExpiryDate IS NULL " +
+                            "AND X.OutletUID IS NULL ";
+
+                db.ExecuteStoreCommand(cmdText);
+
+                //reactivate
+                cmdText = "UPDATE DistributorOutlet " +
+                          "SET ExpiryDate = NULL, LastModifiedDate = GETDATE(), LastModifiedBy = '" + userName + "' " +
+                          "FROM DistributorOutlet DO " +
+                          "INNER JOIN ( " +
+                          "SELECT DISTINCT AO.OutletUID " +
+                                "FROM Distributor D " +
+                                "INNER JOIN Agent A ON A.DistributorUID = D.UID " +
+                                "INNER JOIN AgentOutlet AO ON A.UID = AO.AgentUID " +
+                                "WHERE D.UID = " + distributorUID + " " +
+                                "AND A.mpt_DesignationEnum = 1 " +
+                                ") X ON X.OutletUID = DO.OutletUID " +
+                            "WHERE " +
+                            "DO.DistributorUID = " + distributorUID + " " +
+                            "AND DO.ExpiryDate IS NOT NULL";
+
+                db.ExecuteStoreCommand(cmdText);
+
+                ts.Complete();
+            }
+        }
+
+        public static void DeleteUploadData_OU()
+        {
+            using (VantageEntities db = new VantageEntities())
+            {
+                db.ExecuteStoreCommand("TRUNCATE TABLE I_UTIBA_AGENT");
+            }
+        }
+        #endregion
+
+        #region Import UTIBA Distributor - Agent - Outlet Mapping ---------------------------------
+
+        public static void ImportData_OU(int distributorUID, int agentUID)
+        {
+            using (VantageEntities db = new VantageEntities())
+            {
+                int? tlsNumber = db.Agent.First(p => p.UID == agentUID).TLSNumber;
+
+                if (!tlsNumber.HasValue)
+                    throw new Exception("TLS Number not found for DSR.");
+
+                var distributorinfo = (from d in db.Distributor
+                                       where d.UID == distributorUID
+                                       select new
+                                       {
+                                           d.TLDNumber
+                                       }).First();
+
+                db.Import_UTIBA_OutletMapping(tlsNumber);
+
+                var utibainfo = db.I_UTIBA_AGENT.FirstOrDefault();
+
+                if (utibainfo == null)
+                    throw new Exception("Data not imported.");
+
+                if (utibainfo.DealerDN.Value != (distributorinfo.TLDNumber ?? 0))
+                    throw new Exception("Current Dealer - DSR mapping does not match UTIBA structure.");
+
+                string cmdText = 
+                            "UPDATE IUA " +
+                            "SET [Type] = 'E' " + // ERROR
+                            "FROM I_UTIBA_AGENT IUA " +
+                            "LEFT OUTER JOIN Outlet O ON O.TLRNumber = IUA.RetailerDN " +
+                            "WHERE O.UID IS NULL";
+
+                db.ExecuteStoreCommand(cmdText);
+
+                cmdText = 
+                            "UPDATE IUA " +
+                            "SET [Type] = 'A' " + // ADD
+                            "FROM I_UTIBA_AGENT IUA " +
+                            "INNER JOIN Outlet O ON O.TLRNumber = IUA.RetailerDN " +
+                            "LEFT OUTER JOIN AgentOutlet AO ON AO.AgentUID = " + agentUID + " AND AO.OutletUID = O.UID " +
+                            "AND AO.ExpiryDate IS NULL " +
+                            "WHERE AO.AgentUID IS NULL";
+
+                db.ExecuteStoreCommand(cmdText);
+
+                cmdText = "INSERT INTO I_UTIBA_AGENT(RetailerDN, [Type]) " +
+                          "SELECT OU.TLRNumber, 'R' " + // REMOVE
+                          "FROM AgentOutlet AO " +
+                          "INNER JOIN Outlet OU ON OU.UID = AO.OutletUID " +
+                          "LEFT OUTER JOIN ( " +
+                                "SELECT O.UID AS OutletUID " +
+                                "FROM I_UTIBA_AGENT IUA " +
+                                "INNER JOIN Outlet O ON O.TLRNumber = IUA.RetailerDN " +
+                                ") X ON AO.OutletUID = X.OutletUID " +
+                          "WHERE AO.AgentUID = " + agentUID + " AND X.OutletUID IS NULL " +
+                          "AND AO.ExpiryDate IS NULL " +
+                          "AND OU.TLRNumber > 0";
+
+                db.ExecuteStoreCommand(cmdText);
+
+                cmdText = "SELECT 1 FROM I_UTIBA_AGENT WHERE [Type] = 'E' ";
+                Object errorLine = new DbHelper().GetScalar(cmdText);
+
+                bool isErrorLineExists = errorLine != null && errorLine != DBNull.Value;
+
+                if (isErrorLineExists)
+                    throw new Exception("Some retailers were not found in the system.");
+            }
+        }
+
+        public static DataSet GetUTIBAData_OU()
+        {
+            string cmdText = "SELECT DealerDN, RetailerDN, Type FROM I_UTIBA_AGENT ORDER BY Type DESC";
+
+            DataSet dataSet = new DbHelper().GetDataSet(cmdText);
+
+            return dataSet;
+        }
+
+        public static void SaveUTIBAData_OU(int distributorUID, int agentUID, UserCredential credential)
+        {
+            VantageEntities db = new VantageEntities();
+
+            string userName = "$axa_" + credential.Username.ToUpper();
+            int rowCount = 0;
+            using (TransactionScope ts = new TransactionScope())
+            {
+                //expire AgentOutlet
+                string cmdText = 
+                    "UPDATE A " +
+                    "SET ExpiryDate = GETDATE(), LastModifiedBy = '" + userName + "', " +
+                    "LastModifiedDate = GETDATE() " +
+                    "FROM AgentOutlet A " +
+                    "INNER JOIN Outlet C ON C.UID = A.OutletUID " +
+                    "LEFT OUTER JOIN I_UTIBA_AGENT B ON C.TLRNumber = B.RetailerDN " +
+                    "WHERE A.AgentUID = " + agentUID + " " +
+                    "AND B.RetailerDN IS NULL " +
+                    "AND A.ExpiryDate IS NULL " +
+                    "AND C.TLRNumber IS NOT NULL AND C.TLRNumber > 0 ";
+
+                rowCount = db.ExecuteStoreCommand(cmdText);
+
+                // Expire AgentOutlet for Other Agents
+                cmdText =
+                    "UPDATE AO " +
+                    "SET ExpiryDate = GETDATE(), LastModifiedBy = '" + userName + "' " +
+                    "FROM I_UTIBA_AGENT U " +
+                    "INNER JOIN Outlet O ON O.TLRNumber = U.RetailerDN " +
+                    "INNER JOIN AgentOutlet AO ON AO.OutletUID = O.UID " +
+                    "INNER JOIN Agent A ON AO.AgentUID = A.UID " +
+                    "WHERE AO.AgentUID <> " + agentUID + " AND AO.ExpiryDate IS NULL AND A.mpt_TypeEnum != " + (byte)AgentBL.TypeEnum.SIM; 
+
+                rowCount = db.ExecuteStoreCommand(cmdText);
+
+                //insert AgentOutlet
+                cmdText = 
+                    "INSERT INTO AgentOutlet(AgentUID, OutletUID, CreationDate, LastModifiedBy) " +
+                    "SELECT " + agentUID + ", O.UID, GETDATE(), '" + userName + "' " +
+                    "FROM ( " +
+                    "   SELECT DISTINCT O.UID " +
+                    "   FROM I_UTIBA_AGENT I " +
+                    "   INNER JOIN Outlet O ON O.TLRNumber = I.RetailerDN " +
+                    ") O " +
+                    "LEFT OUTER JOIN AgentOutlet AO ON O.UID = AO.OutletUID AND " + agentUID + " = AO.AgentUID " +
+                    "WHERE AO.AgentUID IS NULL ";
+
+                rowCount = db.ExecuteStoreCommand(cmdText);
+
+                // re-active AgentOutlet
+                cmdText = 
+                    "UPDATE A " +
+                    "SET ExpiryDate = NULL, LastModifiedDate = GETDATE(), LastModifiedBy = '" + userName + "' " +
+                    "FROM AgentOutlet A " +
+                    "INNER JOIN Outlet C ON C.UID = A.OutletUID " +
+                    "INNER JOIN I_UTIBA_AGENT B ON C.TLRNumber = B.RetailerDN " +
+                    "WHERE A.AgentUID = " + agentUID + " " +
+                    "AND A.ExpiryDate IS NOT NULL ";
+
+                rowCount = db.ExecuteStoreCommand(cmdText);
+
+                //insert DistributorOutlet
+                cmdText = 
+                    "INSERT INTO DistributorOutlet(DistributorUID, OutletUID, CreationDate, LastModifiedBy) " +
+                    "SELECT " + distributorUID + ", X.OutletUID, GETDATE(), '" + userName + "' " +
+                    "FROM ( " +
+                    "   SELECT DISTINCT AO.OutletUID " +
+                    "   FROM Distributor D " +
+                    "   INNER JOIN Agent A ON A.DistributorUID = D.UID " +
+                    "   INNER JOIN AgentOutlet AO ON A.UID = AO.AgentUID " +
+                    "   WHERE D.UID = " + distributorUID + " " +
+                    "   AND A.mpt_DesignationEnum = 1 " +
+                    ") X " +
+                    "LEFT OUTER JOIN DistributorOutlet Y ON Y.DistributorUID = " + distributorUID + " AND X.OutletUID = Y.OutletUID " +
+                    "WHERE Y.DistributorUID IS NULL ";
+
+                rowCount = db.ExecuteStoreCommand(cmdText);
+
+                //expire DistributorOutlet (All)
+                cmdText =
+                    "UPDATE DO " +
+                    "SET ExpiryDate = GETDATE(), LastModifiedBy = '" + userName + "', LastModifiedDate = GETDATE() " +
+                    "FROM DistributorOutlet DO " +
+                    "LEFT OUTER JOIN ( " +
+                    "   SELECT DISTINCT A.DistributorUID, AO.OutletUID " +
+                    "   FROM Agent A  " +
+                    "   INNER JOIN AgentOutlet AO ON A.UID = AO.AgentUID " +
+                    "       AND A.mpt_DesignationEnum = 1 AND AO.ExpiryDate IS NULL " +
+                    ") X ON X.DistributorUID = DO.DistributorUID AND X.OutletUID = DO.OutletUID " +
+                    "WHERE DO.ExpiryDate IS NULL " +
+                    "AND X.DistributorUID IS NULL";
+
+                rowCount = db.ExecuteStoreCommand(cmdText);
+
+                //reactivate DistributorOutlet
+                cmdText = 
+                    "UPDATE DistributorOutlet " +
+                    "SET ExpiryDate = NULL, LastModifiedDate = GETDATE(), LastModifiedBy = '" + userName + "' " +
+                    "FROM DistributorOutlet DO " +
+                    "INNER JOIN ( " +
+                    "   SELECT DISTINCT AO.OutletUID " +
+                    "   FROM Distributor D " +
+                    "       INNER JOIN Agent A ON A.DistributorUID = D.UID " +
+                    "       INNER JOIN AgentOutlet AO ON A.UID = AO.AgentUID " +
+                    "   WHERE D.UID = " + distributorUID + " " +
+                    "       AND AO.ExpiryDate IS NULL " +
+                    "       AND A.mpt_DesignationEnum = 1 " +
+                    ") X ON X.OutletUID = DO.OutletUID " +
+                    "WHERE " +
+                    "DO.DistributorUID = " + distributorUID + " " +
+                    "AND DO.ExpiryDate IS NOT NULL";
+
+                rowCount = db.ExecuteStoreCommand(cmdText);
+
+                ts.Complete();
+            }
+        }  
+        #endregion
+    }
+
+    public class AgentVisitOutet
+    {
+        public GLatLng Location { get; set; }
+        public DateTime datetime { get; set; }
+        public GLatLng midPoint { get; set; }
+        public int reorderqty { get; set; }
+        public int voucherqty { get; set; }
+        public int bundleItemCount { get; set; }
+        public int deviceCount { get; set; }
+        public int voucherReorderQty { get; set; }
+        public int simReorderQty { get; set; }
+        public int reloadReOrderQty { get; set; }
+        public int bundleItemReOrderQty { get; set; }
+        public int DeviceReOrderQty { get; set; }
+        public string ID { get; set; }
+        public int areaUID { get; set; }
+        public string name { get; set; }
+        public string Address { get; set; }
+        public string Notes { get; set; }
+        public GLatLng point { get; set; }
+        public int curentbalance { get; set; }
+        public int outletstatus { get; set; }
+        public int simCount { get; set; }
+        public int cardCount { get; set; }
+        public int reloadCount { get; set; }
+        public string orderID { get; set; }
+        public string orderDate { get; set; }
+
+        public GLatLng MOLocation { get; set; }
+        public string MOID { get; set; }
+
+        public byte adHoc { get; set; }
+
+
+    }
+    public class ChartSalesPeform
+    {
+        public string description { get; set; }
+        public double target { get; set; }
+        public double archivment { get; set; }
+        public DateTime month { get; set; }
+    }
+
+}
