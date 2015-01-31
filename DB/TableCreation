@@ -1,0 +1,44 @@
+
+CREATE TABLE [dbo].[I_V_IVR_ACTIVATIONS](
+	[UID] [int] IDENTITY(1,1) PRIMARY KEY NOT NULL,
+	[SUBSCRIBER_ID] VARCHAR(15) NULL,
+	[IVR_ACT_DATE] [datetime2](7) NULL,
+	[DEALER_PURCHASE] VARCHAR(32) NULL,
+	[SIM_CODE] VARCHAR(15) NULL,
+	[DEALER_RETAILER] VARCHAR(15) NULL,
+	[ServerCreationDate] [datetime] NULL,
+	[ServerLastModifiedDate] [datetime] NULL
+)
+
+ALTER TABLE [dbo].[I_V_IVR_ACTIVATIONS] 
+ADD  CONSTRAINT [I_V_IVR_ACTIVATIONS_ServerCreationDate]  
+DEFAULT (getdate()) FOR [ServerCreationDate]
+
+
+ALTER TABLE [dbo].[I_V_IVR_ACTIVATIONS] ADD  CONSTRAINT [I_V_IVR_ACTIVATIONS_ServerLastModifiedDate]  
+DEFAULT (getdate()) FOR [ServerLastModifiedDate]
+
+
+CREATE TABLE [dbo].[I_V_IVR_ACTIVATIONS_Temp](
+	[UID] [int] IDENTITY(1,1) PRIMARY KEY NOT NULL,
+	[SUBSCRIBER_ID] VARCHAR(15) NULL,
+	[IVR_ACT_DATE] [datetime2](7) NULL,
+	[DEALER_PURCHASE] VARCHAR(32) NULL,
+	[SIM_CODE] VARCHAR(15) NULL,
+	[DEALER_RETAILER] VARCHAR(15) NULL,
+	[ServerCreationDate] [datetime] NULL,
+	[ServerLastModifiedDate] [datetime] NULL
+)
+
+ALTER TABLE [dbo].[I_V_IVR_ACTIVATIONS_Temp] ADD  CONSTRAINT [I_V_IVR_ACTIVATIONS_Temp_ServerCreationDate]  DEFAULT (getdate()) FOR [ServerCreationDate]
+
+
+ALTER TABLE [dbo].[I_V_IVR_ACTIVATIONS_Temp] ADD  CONSTRAINT [I_V_IVR_ACTIVATIONS_Temp_ServerLastModifiedDate]  DEFAULT (getdate()) FOR [ServerLastModifiedDate]
+
+CREATE TABLE [dbo].[LastSIM_ProccessDate](
+	[FromDate] [datetime] NULL,
+	[ToDate] [datetime] NULL,
+)
+
+--DROP TABLE [I_V_IVR_ACTIVATIONS]
+
