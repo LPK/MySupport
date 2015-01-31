@@ -1,0 +1,54 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Web;
+using System.Web.Caching;
+
+namespace Vantage.BusinessLogicLayer
+{
+    public class CacheBL
+    {
+        public enum CacheKey
+        {
+            OutletCache = 0,
+            VoucherExtCache = 1,
+            OutletMappingCache = 2
+        }
+
+        public object GetCacheItem(string rawKey, int masterCacheKeyArrayIndex)
+        {
+            return HttpRuntime.Cache[GetCacheKey(rawKey, masterCacheKeyArrayIndex)];
+        }
+
+        private readonly string[] MasterCacheKeyArray = { "OutletCache", "VoucherExtCache", "OutletMappingCache" };
+        public string GetCacheKey(string cacheKey, int masterCacheKeyArrayIndex)
+        {
+            return string.Concat(MasterCacheKeyArray[masterCacheKeyArrayIndex], "-", cacheKey);
+        }
+
+        const double CacheDuration = 3600.0;
+        public void AddCacheItem(string rawKey, object value, int masterCacheKeyArrayIndex)
+        {
+            if (value != null)
+            {
+                System.Web.Caching.Cache DataCache = HttpRuntime.Cache;
+                // Make sure MasterCacheKeyArray[0] is in the cache - if not, add it
+                if (DataCache[MasterCacheKeyArray[masterCacheKeyArrayIndex]] == null)
+                    DataCache[MasterCacheKeyArray[masterCacheKeyArrayIndex]] = DateTime.Now;
+                // Add a CacheDependency
+                System.Web.Caching.CacheDependency dependency =
+                    new CacheDependency(null, MasterCacheKeyArray);
+                DataCache.Insert(GetCacheKey(rawKey, masterCacheKeyArrayIndex), value, dependency,
+                    DateTime.Now.AddSeconds(CacheDuration),
+                    System.Web.Caching.Cache.NoSlidingExpiration);
+            }
+        }
+
+        public void InvalidateCache(int masterCacheKeyArrayIndex)
+        {
+            // Remove the cache dependency
+            HttpRuntime.Cache.Remove(MasterCacheKeyArray[masterCacheKeyArrayIndex]);
+        }
+    }
+}
