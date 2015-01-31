@@ -1,0 +1,8 @@
+public partial class AddPerson : System.Web.UI.Page
+    {
+
+        protected void fvPerson_ItemInserted(object sender, FormViewInsertedEventArgs e)
+        {
+            Response.Redirect("Default.aspx");
+        }
+    }
