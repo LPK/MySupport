@@ -1,0 +1,118 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace Vantage.BusinessLogicLayer
+{
+    #region CMD2Context : MD2 Context class code
+
+    /// <summary>
+    /// MD2 Context class
+    /// </summary>
+    class MD2Context
+    {
+        /// <summary>State</summary>
+        private byte[] m_abState;    /* state */
+
+        /// <summary>Checksum</summary>
+        private byte[] m_abChecksum; /* checksum */
+
+        /// <summary>Number of bytes, modulo 16</summary>
+        private UInt32 m_unCount;	/* number of bytes, modulo 16 */
+
+        /// <summary>Input buffer</summary>
+        private byte[] m_abBuffer;   /* input buffer */
+
+        /// <summary>
+        /// Default constructor, which initializes the members
+        /// </summary>
+        public MD2Context()
+        {
+            m_abState = new byte[16] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };/* state */
+            m_abChecksum = new byte[16] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };/* checksum */
+            m_unCount = 0;											/* number of bytes, modulo 16 */
+            m_abBuffer = new byte[16];									/* input buffer */
+
+        }// end default constructor
+
+
+        /// <summary>
+        /// Gets or sets the State of the MD2 context
+        /// </summary>
+        public byte[] State
+        {
+            set { m_abState = value; }
+            get { return m_abState; }
+
+        }// end property State
+
+
+        /// <summary>
+        /// Gets or sets the Checksum of the MD2 context
+        /// </summary>
+        public byte[] Checksum
+        {
+            set { m_abChecksum = value; }
+            get { return m_abChecksum; }
+
+        }// end property Checksum
+
+
+        /// <summary>
+        /// Gets or sets the Count of the MD2 context
+        /// </summary>
+        public UInt32 Count
+        {
+            set { m_unCount = value; }
+            get { return m_unCount; }
+
+        }// end property Count
+
+
+        /// <summary>
+        /// Gets or sets the Buffer of the MD2 context
+        /// </summary>
+        public byte[] Buffer
+        {
+            set { m_abBuffer = value; }
+            get { return m_abBuffer; }
+
+        }// end property Buffer
+
+
+        /// <summary>
+        /// Converts the MD2 context to a printable string
+        /// </summary>
+        /// <returns>string representation of the MD2 context</returns>
+        public override string ToString()
+        {
+            string sRetVal = "";
+            int nIndex = 0;
+            int nMax = 0;
+
+            sRetVal = "Count : " + this.Count.ToString();
+
+            nMax = this.Buffer.Length;
+            for (nIndex = 0, sRetVal += "\nChecksum : "; nIndex < nMax; nIndex++)
+                sRetVal += this.Buffer[nIndex].ToString() + " ";
+
+            nMax = this.Checksum.Length;
+
+            for (nIndex = 0, sRetVal += "\nChecksum : "; nIndex < nMax; nIndex++)
+                sRetVal += this.Checksum[nIndex].ToString() + " ";
+
+            nMax = this.State.Length;
+            for (nIndex = 0, sRetVal += "\nState : "; nIndex < nMax; nIndex++)
+                sRetVal += this.State[nIndex].ToString() + " ";
+
+
+            return sRetVal;
+
+        }
+
+
+    }// end class CContextMD2
+
+    #endregion    
+}
