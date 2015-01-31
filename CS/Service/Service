@@ -1,0 +1,109 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.Script.Serialization;
+using Vantage.BusinessLogicLayer;
+using System.Data.OleDb;
+using System.Data;
+
+namespace Vantage.WebUI.Services
+{
+    /// <summary>
+    /// Summary description for GISBusinessAreaDetailsHandler
+    /// </summary>
+    public class GISBusinessAreaDetailsHandler : IHttpHandler
+    {
+
+        public void ProcessRequest(HttpContext context)
+        {
+            int areaUID = Convert.ToInt32(context.Request.Form["AreaUID"]);
+
+            int areaLevel = Convert.ToInt32(context.Request.Form["AreaLevel"]);
+            int distributorUID = Convert.ToInt32(context.Request.Form["DistributorUID"]);
+            byte designation = Convert.ToByte(context.Request.Form["Designation"]);
+            int employeeUID = Convert.ToInt32(context.Request.Form["EmployeeUID"]);
+            int itemCategory = Convert.ToInt32(context.Request.Form["ItemCategoryType"]);
+            
+
+            int? BussinessAreaUID = -1;
+            int? RegionUID = -1;
+            int? ZoneUID = -1;
+
+            if (areaLevel == 0 && areaUID == 0)
+                return;
+            else if (areaLevel == (int)AreaBL.TypeEnum.BusinessArea1)
+                ZoneUID = areaUID;
+            else if (areaLevel == (int)AreaBL.TypeEnum.BusinessArea2)
+                RegionUID = areaUID;
+            else if (areaLevel == (int)AreaBL.TypeEnum.BusinessArea3)
+                BussinessAreaUID = areaUID;
+
+            DataSet ds = new DataSet();
+            using (OleDbConnection connection = new OleDbConnection(ApplicationDefault.ConnectionString))
+            {
+                connection.Open();
+
+                OleDbCommand command = new OleDbCommand("GISBusinessAreaStockOutReportDetail", connection);
+                command.CommandType = CommandType.StoredProcedure;
+
+                command.Parameters.AddWithValue("@AreaUID", areaUID);
+                command.Parameters.AddWithValue("@AreaLevel", areaLevel);
+                command.Parameters.AddWithValue("@ItemCategory", itemCategory);
+                if (distributorUID == 0)                
+                    command.Parameters.AddWithValue("@DistributorUID", null);                
+                else                
+                    command.Parameters.AddWithValue("@DistributorUID", distributorUID);                
+                command.Parameters.AddWithValue("@UserDesignationEnum", designation);
+                command.Parameters.AddWithValue("@UserEmployeeUID", employeeUID);
+
+                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(command);
+
+                dataAdapter.Fill(ds, "t");
+
+                connection.Close();
+            }
+
+            String jsonStr = "";
+            JavaScriptSerializer ser = new JavaScriptSerializer();
+            ser.MaxJsonLength = int.MaxValue;
+            List<OutletMapDetails> list = new List<OutletMapDetails>();
+            foreach (DataRow row in ds.Tables[0].Rows)
+            {
+                OutletMapDetails oDetails = new OutletMapDetails();
+
+                oDetails.RetID = Convert.ToString(row.Field<string>("OutletID"));
+                oDetails.RetName = Convert.ToString(row.Field<string>("OutletName"));
+                oDetails.Addr = Convert.ToString(row.Field<string>("StreetAddress"));
+                oDetails.RodLvl = Convert.ToDecimal(row.Field<decimal>("Reorder_Level"));
+                oDetails.DlrName = Convert.ToString(row.Field<string>("Dealer"));
+                oDetails.DsrNo = Convert.ToInt32(row.Field<int>("DSRNumber"));
+                oDetails.Contact = Convert.ToString(row.Field<string>("Telephone"));
+                oDetails.OprDstrct = Convert.ToString(row.Field<string>("OperationalDistrict"));
+                oDetails.Bal = Convert.ToDecimal(row.Field<decimal>("BalanceQty"));
+                oDetails.LastVisitstDate = Convert.ToString(row.Field<DateTime>("LastVisit"));
+                oDetails.OutletLat = Convert.ToDecimal(row.Field<decimal>("Latitude"));
+                oDetails.OutletLon = Convert.ToDecimal(row.Field<decimal>("Longitude"));
+
+                //jsonStr = ser.Serialize(oDetails);
+                ////ClientScript.(GetType(), "SetInfoWindowByJson", "SetInfoWindowByJson(" + jsonStr + ");");
+                ////Page.ClientScript.RegisterStartupScript(this.GetType(), "SetInfoWindowByJson", "SetInfoWindowByJson(" + jsonStr + ");", true);
+                //ScriptManager.RegisterStartupScript(UpdatePanel1, this.GetType(), "SetInfoWindowByJson", "SetInfoWindowByJson('" + jsonStr.ToString() + "');", true);
+
+                list.Add(oDetails);
+            }
+
+            jsonStr = ser.Serialize(list);
+
+            context.Response.Write(jsonStr);
+        }
+
+        public bool IsReusable
+        {
+            get
+            {
+                return false;
+            }
+        }
+    }
+}
