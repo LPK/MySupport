@@ -1,0 +1,164 @@
+<?xml version="1.0"?>
+<!--
+  For more information on how to configure your ASP.NET application, please visit
+  http://go.microsoft.com/fwlink/?LinkId=169433
+  -->
+<configuration>
+	<configSections>
+		<!-- For more information on Entity Framework configuration, visit http://go.microsoft.com/fwlink/?LinkID=237468 -->
+		<section name="entityFramework" type="System.Data.Entity.Internal.ConfigFile.EntityFrameworkSection, EntityFramework, Version=4.4.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" requirePermission="false"/>
+		<sectionGroup name="devExpress">
+			<section name="settings" type="DevExpress.Web.ASPxClasses.SettingsConfigurationSection, DevExpress.Web.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a" requirePermission="false"/>
+			<section name="compression" type="DevExpress.Web.ASPxClasses.CompressionConfigurationSection, DevExpress.Web.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a" requirePermission="false"/>
+			<section name="themes" type="DevExpress.Web.ASPxClasses.ThemesConfigurationSection, DevExpress.Web.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a" requirePermission="false"/>
+			<section name="errors" type="DevExpress.Web.ASPxClasses.ErrorsConfigurationSection, DevExpress.Web.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a" requirePermission="false"/>
+		</sectionGroup>
+	</configSections>
+
+
+	<!--<appSettings>
+    
+    -->
+	<!--<add key="googlemaps_api_premier" value="gme-xxxxx" />-->
+	<!--
+    -->
+	<!--<add key="googlemaps_api_premier_channel" value="mkting" />-->
+	<!--
+  </appSettings>-->
+
+	<appSettings>
+		<add key="BuinessAreaStockOutDumpPath" value="~/BuinessAreaStockOutDump/" />
+		<add key="SharedFileUploadFormatsPath" value="\\ldev-lk\SharedFileUploadHFormats" />
+		<add key="DNRecycleUploadPath" value="\\Ldev-lk\DNRecycleUploadFiles\" />
+		<add key="BCPDumpLocationPath" value="~/BCPDumpLocation/" />
+		<add key="DistrictFRWiseReportPath" value="~/DistrictFRWiseReport/" />
+		<add key="StockAvalabilityHourlyPath" value="~/StockAvalabilityHourly/" />
+		<add key="StockOutReport" value="~/stockoutrpt/" />
+		<add key="TargetFilePath" value="~/TargetFiles/" />
+		<add key="UploadFilePath" value="~/UploadFiles/" />
+		<add key="IVRUploadFilePath" value="~/IVRUploadFiles/" />
+		<add key="ROLFilePath" value="~/ROLFiles/" />
+		<add key="HOReturnFilePath" value="~/HOReturnFiles/" />
+		<add key="ExportFilePath" value="~/ExportFiles/" />
+		<add key="RetailerTargetFilePath" value="~/RetailerTargetFiles/"/>
+		<add key="EmployeeTargetFilePath" value="~/EmployeeTargetFiles/"/>
+		<add key="EmployeeTargetPointFilePath" value="~/EmployeeTargetPointFiles/"/>
+		<add key="RetailerCommisionPaymentPath" value="~/RetailerCommisionPaymentFiles/"/>
+		<add key="CommissionUserFiles" value="~/CommissionUserFiles/"/>
+		<add key="CommissionUserBlockFiles" value="~/CommissionUserBlockFiles"/>
+		<add key="Browser" value="IEE" />
+		<add key="VantageUTIBA_API_UMarketSC_UMarketSC" value="http://192.168.54.30:8280/services/umarketsc"/>
+		<add key="Password" value="sandi2wsx@WSX"/>
+		<add key="Source" value="hutch"/>
+		<add key="Type" value="2"/>
+		<add key="Usename" value="sandi_comm"/>
+	</appSettings>
+	<connectionStrings>
+
+		<!--MERCURY >> VantageTELCOLIVE-->
+		<!--<add name="VantageEntities" connectionString="metadata=res://*/VantageModel.csdl|res://*/VantageModel.ssdl|res://*/VantageModel.msl;provider=System.Data.SqlClient;provider connection string=&quot;data source=MERCURY;initial catalog=VantageTELCOLIVE;persist security info=True;user id=sa;password=we12345;multipleactiveresultsets=True;App=EntityFramework&quot;" providerName="System.Data.EntityClient" />
+		<add name="VantageConnectionString" connectionString="Provider=SQLOLEDB;Data Source=MERCURY;Initial Catalog=VantageTELCOLIVE;User ID=sa;Password=we12345" providerName="System.Data.SqlClient" />-->
+		
+		<!--MERCURY >> VantageTELCO-->
+		<!--<add name="VantageEntities" connectionString="metadata=res://*/VantageModel.csdl|res://*/VantageModel.ssdl|res://*/VantageModel.msl;provider=System.Data.SqlClient;provider connection string=&quot;data source=Mercury;initial catalog=VantageTELCO;persist security info=True;user id=sa;password=we12345;multipleactiveresultsets=True;App=EntityFramework&quot;" providerName="System.Data.EntityClient" />
+		<add name="VantageConnectionString" connectionString="Provider=SQLOLEDB;Data Source=Mercury;Initial Catalog=VantageTELCO;User ID=sa;Password=we12345" providerName="System.Data.SqlClient" />-->
+		
+		<!--WPLSANDIDB01--> 
+		<!--<add name="VantageEntities" connectionString="metadata=res://*/VantageModel.csdl|res://*/VantageModel.ssdl|res://*/VantageModel.msl;provider=System.Data.SqlClient;provider connection string=&quot;data source=WPLSANDIDB01;initial catalog=VantageTELCOLIVE;persist security info=True;user id=sa;password=we12345;multipleactiveresultsets=True;App=EntityFramework&quot;" providerName="System.Data.EntityClient" />
+		<add name="VantageConnectionString" connectionString="Provider=SQLOLEDB;Data Source=WPLSANDIDB01;Initial Catalog=VantageTELCOLIVE;User ID=sa;Password=we12345" providerName="System.Data.SqlClient" />
+		<add name="VantageReportConnectionString" connectionString="Provider=SQLOLEDB;Data Source=WPLSANDIDB01;Initial Catalog=VantageTELCOLIVE;User ID=sa;Password=we12345" providerName="System.Data.SqlClient" />--> 
+
+        <!--192.168.111.115-->
+		<!--Bcp Tool ConnString User= VAAdmin-->
+		<!--<add name="VantageEntities" connectionString="metadata=res://*/VantageModel.csdl|res://*/VantageModel.ssdl|res://*/VantageModel.msl;provider=System.Data.SqlClient;provider connection string=&quot;data source=192.168.111.115;initial catalog=TelcoTest2;persist security info=True;user id=sa;password=we12345;multipleactiveresultsets=True;App=EntityFramework&quot;" providerName="System.Data.EntityClient" />
+		 <add name="VantageConnectionString" connectionString="Provider=SQLOLEDB;Data Source=192.168.111.115;Initial Catalog=TelcoTest2;User ID=sa;Password=we12345" providerName="System.Data.SqlClient" />
+		 <add name="VantageReportConnectionString" connectionString="Provider=SQLOLEDB;Data Source=192.168.111.115;Initial Catalog=TelcoTest2;User ID=sa;Password=we12345" providerName="System.Data.SqlClient" />-->
+
+
+		<!--PLUTO\SQL10R2 >> VantageTelcoLive-->
+		<!--Bcp Tool ConnString User= VAAdmin-->
+        <add name="VantageEntities" connectionString="metadata=res://*/VantageModel.csdl|res://*/VantageModel.ssdl|res://*/VantageModel.msl;provider=System.Data.SqlClient;provider connection string=&quot;data source=PLUTO\SQL10R2;initial catalog=HutchLive;persist security info=True;user id=sa;password=we12345;multipleactiveresultsets=True;App=EntityFramework&quot;" providerName="System.Data.EntityClient" />
+		<add name="VantageConnectionString" connectionString="Provider=SQLOLEDB;Data Source=PLUTO\SQL10R2;Initial Catalog=HutchLive;User ID=sa;Password=we12345" providerName="System.Data.SqlClient" />		
+		<add name="VantageReportConnectionString" connectionString="Provider=SQLOLEDB;Data Source=PLUTO\SQL10R2;Initial Catalog=HutchLive;User ID=sa;Password=we12345" providerName="System.Data.SqlClient" />
+
+	</connectionStrings>
+	<system.web>
+		<customErrors mode="on" defaultRedirect="~/ErrorPages/ErrorPage.aspx">
+			<error statusCode="403" redirect="NoAccess.htm" />
+			<error statusCode="404" redirect="FileNotFound.htm" />
+		</customErrors>
+		<httpRuntime maxRequestLength="1048576" executionTimeout="3600" requestValidationMode="2.0" />
+		<compilation debug="true" targetFramework="4.0">
+			<assemblies>
+				<add assembly="DevExpress.XtraCharts.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a"/>
+				<add assembly="DevExpress.Charts.v10.2.Core, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+				<add assembly="DevExpress.Web.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+				<add assembly="DevExpress.Data.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+				<add assembly="DevExpress.Web.ASPxTreeList.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+				<add assembly="DevExpress.Web.ASPxEditors.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+				<add assembly="DevExpress.Web.ASPxGridView.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+				<add assembly="DevExpress.Web.ASPxPivotGrid.v10.2.Export, Version=10.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a"/>
+				<add assembly="DevExpress.Web.ASPxScheduler.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+				<add assembly="DevExpress.XtraScheduler.v10.2.Core, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+				<!--<add assembly="DevExpress.Web.ASPxEditors.v9.1, Version=9.1.1.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+        <add assembly="DevExpress.Web.v9.1, Version=9.1.1.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+        <add assembly="DevExpress.Data.v9.1, Version=9.1.1.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>-->
+				<add assembly="System.Design, Version=4.0.0.0, Culture=neutral, PublicKeyToken=B03F5F7F11D50A3A"/>
+				<add assembly="System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=B77A5C561934E089"/>
+				<add assembly="DevExpress.Web.ASPxPivotGrid.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+				<add assembly="DevExpress.PivotGrid.v10.2.Core, Version=10.2.6.0, Culture=neutral, PublicKeyToken=B88D1754D700E49A"/>
+			</assemblies>
+		</compilation>
+		<authentication mode="Forms">
+			<forms loginUrl="~/Login.aspx" defaultUrl="Home.aspx" timeout="2880"/>
+		</authentication>
+		<globalization uiCulture="en" culture="en-GB"/>
+		<membership>
+			<providers>
+				<clear/>
+				<add name="AspNetSqlMembershipProvider" type="System.Web.Security.SqlMembershipProvider" connectionStringName="ApplicationServices" enablePasswordRetrieval="false" enablePasswordReset="true" requiresQuestionAndAnswer="false" requiresUniqueEmail="false" maxInvalidPasswordAttempts="5" minRequiredPasswordLength="6" minRequiredNonalphanumericCharacters="0" passwordAttemptWindow="10" applicationName="/"/>
+			</providers>
+		</membership>
+		<profile>
+			<providers>
+				<clear/>
+				<add name="AspNetSqlProfileProvider" type="System.Web.Profile.SqlProfileProvider" connectionStringName="ApplicationServices" applicationName="/"/>
+			</providers>
+		</profile>
+		<roleManager enabled="false">
+			<providers>
+				<clear/>
+				<add name="AspNetSqlRoleProvider" type="System.Web.Security.SqlRoleProvider" connectionStringName="ApplicationServices" applicationName="/"/>
+				<add name="AspNetWindowsTokenRoleProvider" type="System.Web.Security.WindowsTokenRoleProvider" applicationName="/"/>
+			</providers>
+		</roleManager>
+		<httpModules>
+			<add type="DevExpress.Web.ASPxClasses.ASPxHttpHandlerModule, DevExpress.Web.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a" name="ASPxHttpHandlerModule"/>
+		</httpModules>
+	</system.web>
+	<system.webServer>
+		<modules runAllManagedModulesForAllRequests="true">
+			<add type="DevExpress.Web.ASPxClasses.ASPxHttpHandlerModule, DevExpress.Web.v10.2, Version=10.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a" name="ASPxHttpHandlerModule"/>
+		</modules>
+		<security>
+			<requestFiltering>
+				<requestLimits maxAllowedContentLength="1073741824" />
+			</requestFiltering>
+		</security>
+
+		<validation validateIntegratedModeConfiguration="false"/>
+	</system.webServer>
+	<entityFramework>
+		<defaultConnectionFactory type="System.Data.Entity.Infrastructure.LocalDbConnectionFactory, EntityFramework">
+			<parameters>
+				<parameter value="v11.0"/>
+			</parameters>
+		</defaultConnectionFactory>
+	</entityFramework>
+	<devExpress>
+		<settings rightToLeft="false"/>
+		<compression enableHtmlCompression="false" enableCallbackCompression="true" enableResourceCompression="true" enableResourceMerging="false"/>
+		<themes enableThemesAssembly="true"/>
+		<errors callbackErrorRedirectUrl=""/>
+	</devExpress>
+</configuration>
