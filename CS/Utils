@@ -1,0 +1,162 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.IO;
+
+namespace Vantage.BusinessLogicLayer
+{
+    public class KeyValue
+    {
+        public int Key { set; get; }
+        public int Value { set; get; }
+        public string Text { set; get; }
+        public bool IsSet { set; get; }
+
+        public KeyValue()
+        {
+        }
+        public KeyValue(int key, int value)
+        {
+            this.Key = key;
+            this.Value = value;
+          
+        }
+        public KeyValue(int value, string text)
+        {
+            this.Value = value;
+            this.Text = text;
+        }
+        public KeyValue(int value, string text, bool isSet)
+        {
+            this.Value = value;
+            this.Text = text;
+            this.IsSet = isSet;
+        }
+    }
+
+    public class Utils
+    {
+        #region Bookmark --------------------------------------------------------------------------
+
+        public IQueryable GetBookmarks(UserCredential credential)
+        {
+            VantageEntities db = new VantageEntities();
+
+            var result = from bm in db.Bookmark
+                         where bm.LoginUID == credential.LoginUID
+                         orderby bm.Description
+                         select new
+                         {
+                             bm.UID,
+                             bm.Description,
+                             bm.URL
+                         };
+
+            return result;
+        }
+
+        public void AddBookmarks(string description, string url, UserCredential credential)
+        {
+            VantageEntities db = new VantageEntities();
+
+            Bookmark bm = new Bookmark();
+
+            bm.LoginUID = credential.LoginUID;
+            bm.Description = description;
+            bm.URL = url;
+            bm.CreationDate = DateTime.Now;
+
+            db.Bookmark.AddObject(bm);
+            db.SaveChanges();
+        }
+
+        public void RemoveBookmark(int uid)
+        {
+            VantageEntities db = new VantageEntities();
+
+            Bookmark bm = db.Bookmark.FirstOrDefault(p => p.UID == uid);
+
+            if (bm != null)
+            {
+                db.Bookmark.DeleteObject(bm);
+                db.SaveChanges();
+            }
+        }
+
+        #endregion
+
+        public static KeyValuePair<int, int> GetKeys(String keys)
+        {
+            KeyValuePair<int, int> key;
+            int index = keys.IndexOf('|');
+
+            key = new KeyValuePair<int, int>(
+                Convert.ToInt32(keys.Substring(0, index)),
+                Convert.ToInt32(keys.Substring(index + 1)));
+
+            return key;
+        }
+
+        public static KeyValuePair<int, long> GetKeys2(String keys)
+        {
+            KeyValuePair<int, long> key;
+            int index = keys.IndexOf('|');
+
+            key = new KeyValuePair<int, long>(
+                Convert.ToInt32(keys.Substring(0, index)),
+                Convert.ToInt64(keys.Substring(index + 1)));
+
+            return key;
+        }
+
+        public static List<int> GetKeyList(String keys)
+        {
+            List<int> keylist = new List<int>();
+
+            string[] str = keys.Split('|');
+            foreach (string key in str)
+                keylist.Add(Convert.ToInt32(key));
+
+            return keylist;
+        }
+
+        public static List<int> GetIntList(List<object> list)
+        {
+            List<int> intList = list.Select(i => Convert.ToInt32(i.ToString())).ToList<int>();
+
+            return intList;
+        }
+
+        public static decimal Round(decimal value)
+        {
+            return Math.Round(value + 0.0001m, 2);
+        }
+
+        public static bool ValidateNumber(string number)
+        {
+            bool isValid = true;
+
+            string digits = "0123456789";
+            char[] chars = number.ToCharArray();
+
+            for (int i = 0; i < chars.Length; i++)
+            {
+                if (digits.IndexOf(chars[i]) == -1)
+                {
+                    isValid = false;
+                }
+            }
+
+            return isValid;
+        }
+
+        public static string ReplaceInvalidCharsFromFileName(string fileName, string replacementString)
+        {
+            string invalid = new string(Path.GetInvalidFileNameChars()) + new string(Path.GetInvalidPathChars());
+            foreach (char c in invalid)
+                fileName = fileName.Replace(c.ToString(), replacementString);
+            return fileName;
+        }
+    }
+}
