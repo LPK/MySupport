@@ -1,0 +1,109 @@
+---------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
+-- TARGET update - > to mob table
+INSERT INTO mob_AgentCategoryTarget(AgentUID, ItemTypeEnum, MonthTargetQty, ReOrderUnitQty, SoldUnitQty, BalanceQty)
+SELECT DISTINCT AgentUID, ItemTypeEnum, TargetValue, 0, 0, 0
+FROM DistributorAgentOutletROL
+WHERE AgentUID IS NOT NULL AND ItemTypeEnum IS NOT NULL
+	AND TargetValue > 0
+	
+UPDATE X
+SET MonthTargetQty = Y.TargetValue
+FROM mob_AgentCategoryTarget X
+INNER JOIN DistributorAgentOutletROL Y 
+	ON X.AgentUID = Y.AgentUID AND X.ItemTypeEnum = Y.ItemTypeEnum
+WHERE X.MonthTargetQty <> Y.TargetValue
+
+---------------------------------------------------------------------------------------------------
+
+INSERT INTO MultiPurposeTag(ID,MiscData,Type,Priority)
+VALUES('RETAIL','RETAIL',58,0);
+
+---------------------------------------------------------------------------------------------------
+-- RESET TXNS
+UPDATE SIM SET ItemUID = NULL, mpt_LocationTypeEnum = 2 WHERE mpt_LocationTypeEnum <> 2
+UPDATE Voucher SET mpt_LocationTypeEnum = 1
+UPDATE BundleItem SET mpt_LocationTypeEnum = 1
+UPDATE DN SET IsAssigned = 0
+
+/*
+TRUNCATE TABLE SIM;
+TRUNCATE TABLE SIM_DN_Mapping;
+TRUNCATE TABLE SIMTransfer;
+TRUNCATE TABLE SIMUpload;
+TRUNCATE TABLE Voucher;
+TRUNCATE TABLE BundleItem;
+TRUNCATE TABLE DN;
+TRUNCATE TABLE DEVICE;
+*/
+
+DELETE TxnPO
+DELETE TxnPOLine
+DELETE TxnGRN
+DELETE TxnGRNLine
+DELETE WhLocItem
+DELETE TxnStockTransfer
+DELETE TxnStockTransferLine
+DELETE TxnInvoice
+DELETE TxnInvoiceLine
+DELETE TxnReturn
+DELETE TxnReturnLine
+DELETE TxnSimStatus
+DELETE TxnSimStatusLine
+DELETE TxnReloadStatus
+DELETE Call
+DELETE TxnStockTransfer
+DELETE TxnStockTransferLine
+DELETE Message
+DELETE TxnHOReturn
+DELETE TxnHOReturnLine
+
+delete mob_BundelItem
+delete mob_Voucher
+delete mob_WhLocItem
+delete mob_TxnItemStatusHistory
+delete mob_Txn
+delete mob_TxnLine
+delete mob_TxnInvoice
+delete mob_TxnInvoiceLine
+delete mob_TxnReturn
+delete mob_TxnReturnLine
+delete mob_TxnType
+delete mob_Outlet
+delete mob_MPTag
+delete mob_Item
+delete mob_Call
+delete mob_OutletSKUType
+delete mob_Payment
+delete mob_ArDoc
+delete mob_SyncLog
+delete mob_DeviceSyncError
+delete mob_ItemPriceList
+delete mob_Area
+
+---------------------------------------------------------------------------------------------------
+
+SELECT * FROM HOInventoryStockHistory
+
+INSERT INTO HOInventoryStockHistory(Date,mpt_ItemTypeEnum,ItemUID,UnitQty,mpt_LocationTypeEnum, CreationDate)
+SELECT GETDATE(), 3, ItemUID, SUM(EndSerialNumber - StartSerialNumber + 1) AS UnitQty, mpt_LocationTypeEnum, GETDATE()
+FROM Voucher
+GROUP BY ItemUID, mpt_LocationTypeEnum
+
+INSERT INTO HOInventoryStockHistory(Date,mpt_ItemTypeEnum,ItemUID,UnitQty,mpt_LocationTypeEnum,CreationDate)
+SELECT GETDATE(), 1, ItemUID, COUNT(1) AS UnitQty, mpt_LocationTypeEnum, GETDATE()
+FROM SIM
+GROUP BY ItemUID, mpt_LocationTypeEnum
+
+---------------------------------------------------------------------------------------------------
+
+
+INSERT INTO MultiPurposeTag(ID,MiscData, Type, Priority, Data) 
+VALUES('HOIO','HO Inventory Operator',39,0,19)
+INSERT INTO MultiPurposeTag(ID,MiscData, Type, Priority, Data) 
+VALUES('HOIV','HO Inventory Viewer',39,0,20)
+INSERT INTO MultiPurposeTag(ID,MiscData, Type, Priority, Data) 
+VALUES('DCSO','DCS Operator',39,0,21)
+INSERT INTO MultiPurposeTag(ID,MiscData, Type, Priority, Data) 
+VALUES('AA00','Application Admin',39,0,22)
