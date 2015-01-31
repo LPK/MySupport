@@ -1,0 +1,37 @@
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="AddPerson.aspx.cs" Inherits="TeamWebSite.AddPerson" MasterPageFile="~/Site.Master" %>
+<asp:Content ID="HeaderContent" runat="server" ContentPlaceHolderID="HeadContent">
+</asp:Content>
+<asp:Content ID="BodyContent" runat="server" ContentPlaceHolderID="MainContent">
+    <div>
+        <asp:ObjectDataSource ID="dsPerson" runat="server" InsertMethod="CreatePlayer"
+            SelectMethod="GetAllPlayers" TypeName="TeamWebSite.Data.Player">
+        </asp:ObjectDataSource>
+        <asp:FormView ID="fvPerson" runat="server" DataSourceID="dsPerson"
+            DefaultMode="Insert" oniteminserted="fvPerson_ItemInserted" >
+            <InsertItemTemplate>
+                Name:
+                <br />
+                <asp:TextBox ID="PlayerNameTextBox" runat="server"
+                    Text='<%# Bind("PlayerName") %>' />
+                <asp:RequiredFieldValidator ID="rfPlayerName" runat="server" ControlToValidate="PlayerNameTextBox" ErrorMessage="Enter Name"></asp:RequiredFieldValidator>
+                <br />
+                Description:
+                <br />
+                <asp:TextBox ID="PlayerDescriptionTextBox" runat="server"
+                    Text='<%# Bind("PlayerDescription") %>' />
+                <br />
+                Age:
+                <br />
+                <asp:TextBox ID="PlayerAgeTextBox" runat="server"
+                    Text='<%# Bind("PlayerAge") %>' />
+                <br />
+                <asp:RequiredFieldValidator ID="rfPlayerAge" runat="server" ErrorMessage="Enter Age" ControlToValidate="PlayerAgeTextBox" ></asp:RequiredFieldValidator>
+                <asp:LinkButton ID="InsertButton" runat="server" CausesValidation="True"
+                    CommandName="Insert" Text="Insert" />
+                &nbsp;<asp:LinkButton ID="InsertCancelButton" runat="server"
+                    CausesValidation="False" CommandName="Cancel" Text="Cancel" />
+            </InsertItemTemplate>
+        </asp:FormView>
+        <asp:ValidationSummary ID="vsPerson" runat="server" />
+    </div>
+</asp:Content>
