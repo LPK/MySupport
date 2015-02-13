@@ -1,0 +1,1 @@
+ enddate = enddate.Date.AddHours(23).AddMinutes(59);
