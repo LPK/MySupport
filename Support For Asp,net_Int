@@ -1,0 +1,148 @@
+git - gmail   pw - nic
+
+Create core 2 Api project 
+
+#################################################################
+
+Create Model folder and models class with key
+create api controler with actions entity framework
+
+###########################################################
+Add-Migration Initial
+
+"ZCoreContext": "Data Source=.;Integrated Security=False;User ID=sa;Password=we12345;Initial Catalog=NetCore"
+	
+Update-Database 
+
+    change the columns / update /
+	
+Add migration <any name>
+
+Update-Database 
+
+#### ###################################################### Seed data in asp .net core 
+
+core 1.0 
+app.UseStaticFiles();
+app.UseMvc(routes =>
+{
+    routes.MapRoute(
+        name: "default",
+        template: "{controller=Home}/{action=Index}/{id?}");
+});
+
+SeedData.Initialize(app.ApplicationServices);
+
+core 2.0 
+
+public static class SeedData
+{
+    public static void Initialize(IServiceProvider serviceProvider)
+    {
+        var context = serviceProvider.GetRequiredService<WebMarksDbContext>();
+        context.Database.EnsureCreated();
+        if (!context.Tenants.Any())
+        {
+            context.Tenants.Add(new Tenant() { Name = "Hello", Host = "hello", Style = "red.css" });
+            context.Tenants.Add(new Tenant() { Name = "Sample", Host = "sample", Style = "blue.css" });
+            context.SaveChanges();
+        }
+    }
+}
+
+
+public static void Main(string[] args)
+{
+    var host = BuildWebHost(args);
+
+    using (var scope = host.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        var context = services.GetRequiredService<WebMarksDbContext>();
+        try
+        {
+            SeedData.Initialize(services);
+        }
+        catch (Exception ex)
+        {
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "An error occurred seeding the DB.");
+        }
+    }
+
+    host.Run();
+}
+
+### Enable CORS###########################################################################
+
+
+In order to call an API from JavaScript, you need to enable [CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS) on the API server.
+ Since you're building an API that will be called by an Angular app, you need CORS. 
+
+To enable CORS on your API, edit the ```Startup.cs```. In the `ConfigureServices` method add CORS and a default policy:
+
+```csharp
+services.AddCors(options =>
+{
+    options.AddPolicy("CorsPolicy",
+        builder => builder.AllowAnyOrigin()
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials());
+});
+
+#######
+In the Configure method tell the application to use the CorsPolicy on all requests. This must be placed before the UseMvc() statement:
+
+app.UseCors("CorsPolicy");
+app.UseMvc();
+
+
+################################################ Anugular project ###################### 
+
+ng new Workout-app
+
+cd to folder 
+npm install
+
+ng serve --open
+
+ng generate component employee
+
+--------------------------------
+
+//add new project to remote git repo
+git remote add origin https://github.com/LPK/Angular-5.git
+git push -u origin master
+
+//add new file to project to local repo
+git add <filepath>
+git commit <filepath>
+
+//send to remote repo
+git push 
+
+--------------------------------------------- http module 
+add HttpModule to app module 
+
+create serrvice and import 
+injectable  form core 
+http/response for http
+observalble from txjs/observalble
+
+map from txjs/add/operator/map
+
+add injectable class deco
+
+dependicy injection via constructor (private s : service)
+
+create function to return a observalble<arrray[]>
+
+get('http://localhost:30046/api/Employees').map((res:Response) => res.json());
+
+------------
+inject service to cpmponent
+-----------------------
+
+import { HttpModule } from '@angular/http'; to app.module 
+
